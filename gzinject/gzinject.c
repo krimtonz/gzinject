@@ -3,7 +3,7 @@
 #include <string.h>
 #include "gzinject.h"
 #include "aes.h"
-
+#include <direct.h>
 #define GETLONGLONG(X,Y) (X[Y]<<52) | (X[Y+1]<<44) | (X[Y+2]<<36) | (X[Y+3]<<32) | (X[Y+4]<<24) | (X[Y+5]<<16)| (X[Y+6]<<8) | X[Y+7]
 #define GETLONG(X,Y) (X[Y]<<24) | (X[Y+1]<<16) | (X[Y+2]<<8) | (X[Y+3])
 #define GETINT(X,Y) (X[Y]<<8) | X[Y+1]
@@ -98,8 +98,7 @@ u64 be34(const u8 *p)
 int main(int argc, char **argv) {
 
 	WAD* wad = (WAD*)malloc(sizeof(WAD));
-
-	FILE *wadfile = fopen("C:\\users\\andy\\Desktop\\gz.wad", "r");
+	FILE *wadfile = fopen("gz.wad", "r");
 	fseek(wadfile, 0, SEEK_END);
 	wad->wadsize = ftell(wadfile);
 	fseek(wadfile, 0, SEEK_SET);
@@ -123,28 +122,28 @@ int main(int argc, char **argv) {
 	wad->datapos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64) + addpadding(wad->tmdsize, 64);
 	wad->footerpos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64) + addpadding(wad->tmdsize, 64) + addpadding(wad->datasize, 64);
 
-	FILE *testFile = fopen("C:\\users\\andy\\Desktop\\TestExtract\\cert.cert", "w");
+	FILE *testFile = fopen("TestExtract\\cert.cert", "w");
 	unsigned char *buffer = (unsigned char*)malloc(wad->certsize);
 	memcpy(buffer, wad->data + wad->certpos, wad->certsize);
 	fwrite(buffer, 1, wad->certsize, testFile);
 	fclose(testFile);
 	free(buffer);
 
-	testFile = fopen("C:\\users\\andy\\Desktop\\TestExtract\\ticket.tik", "w");
+	testFile = fopen("TestExtract\\ticket.tik", "w");
 	buffer = (unsigned char*)malloc(wad->tiksize);
 	memcpy(buffer, wad->data + wad->tikpos, wad->tiksize);
 	fwrite(buffer, 1, wad->tiksize, testFile);
 	fclose(testFile);
 	free(buffer);
 
-	testFile = fopen("C:\\users\\andy\\Desktop\\TestExtract\\metadata.tmd", "w");
+	testFile = fopen("TestExtract\\metadata.tmd", "w");
 	buffer = (unsigned char*)malloc(wad->tmdsize);
 	memcpy(buffer, wad->data + wad->tmdpos, wad->tmdsize);
 	fwrite(buffer, 1, wad->tmdsize, testFile);
 	free(buffer);
 	fclose(testFile);
 
-	testFile = fopen("C:\\users\\andy\\Desktop\\TestExtract\\footer.footer", "w");
+	testFile = fopen("TestExtract\\footer.footer", "w");
 	buffer = (unsigned char*)malloc(wad->footersize);
 	memcpy(buffer, wad->data + wad->footerpos, wad->footersize);
 	fwrite(buffer, 1, wad->footersize, testFile);
@@ -198,7 +197,7 @@ int main(int argc, char **argv) {
 		AES_init_ctx_iv(aes, encryptedkey, iv);
 
 		char *filename = (char*)malloc(200);
-		snprintf(filename, 200, "C:\\users\\andy\\Desktop\\TestExtract\\content%d.app", i);
+		snprintf(filename, 200, "TestExtract\\content%d.app", i);
 		testFile = fopen(filename, "w");
 
 		uint32_t size = addpadding(getcontentlength(wad, i), 16), size2 = getcontentlength(wad, i);
@@ -240,7 +239,7 @@ int main(int argc, char **argv) {
 				if (dsize == 33554432) {
 					char* name = (char*)&buffer2[nameoffset + curpos];
 					printf("%s\t%d\r\n", name,doffset);
-					FILE *atest = fopen("C:\\users\\andy\\desktop\\test.z64", "w");
+					FILE *atest = fopen("test.z64", "w");
 					fwrite(buffer2 + doffset, 1, dsize, atest);
 					fclose(atest);
 				}
