@@ -263,3 +263,8 @@ __pycache__/
 # Testing File
 *.Wad
 TestExtract/
+/gzinject/wadextract
+*.exe
+*.stackdump
+/gzinject/Debug
+/gzinject.zip

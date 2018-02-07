@@ -1,3 +1,5 @@
+#define TOPPC32(x) ((x&0x0000FFFF) << 16) | ((x & 0xFFFF0000) >> 16) | ((x&0x00FF00FF)<<8) | ((x&0xFF00FF00)>>8)
+
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -44,3 +46,5 @@ u64 be34(const u8 *p);
 
 u32 getcontentlength(WAD *wad, unsigned int contentnum);
 u32 addpadding(unsigned int inp, unsigned int padding);
+
+u32 toppc32(u32 in);
