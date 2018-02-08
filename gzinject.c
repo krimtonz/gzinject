@@ -4,6 +4,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 #include "gzinject.h"
 #include "aes.h"
 #include "sha1.h"
@@ -41,7 +42,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	printf("gzinject extract|pack|genkey\r\n\textract: DonorWad - Extracts DonorWad to wadextract\r\n\tpack: OutWad - Packs wadextact into OutWad\r\n\tgenkey: generates common-key.bin");
+	printf("gzinject extract|pack|genkey\r\n\textract: DonorWad - Extracts DonorWad to wadextract\r\n\tpack: OutWad - Packs wadextact into OutWad\r\n\tgenkey: generates common-key.bin\r\n");
 }
 
 void do_extract(const char *inwad) {
@@ -242,7 +243,6 @@ void do_pack(const char *outwad, const char *titleid) {
 	chdir("content5");
 
 	if ((dir = opendir(".")) != NULL) {
-		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
 				nodec++;
@@ -567,7 +567,7 @@ int main(int argc, char **argv) {
 		exit(0);
 	}
 
-	if (argv[1] == "genkey") {
+	if (strcmp(argv[1],"genkey")) {
 		
 		genkey();
 		return 0;
