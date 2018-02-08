@@ -567,7 +567,7 @@ int main(int argc, char **argv) {
 		exit(0);
 	}
 
-	if (strcmp(argv[1],"genkey")) {
+	if (strcmp(argv[1],"genkey")==0) {
 		
 		genkey();
 		return 0;
