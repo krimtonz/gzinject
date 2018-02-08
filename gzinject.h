@@ -1,4 +1,7 @@
-#define TOPPC32(x) ((x&0x0000FFFF) << 16) | ((x & 0xFFFF0000) >> 16) | ((x&0x00FF00FF)<<8) | ((x&0xFF00FF00)>>8)
+#include <stddef.h>
+
+#define REVERSEENDIAN32(X)  ((X >> 24) & 0xff) | ((X<<8) & 0xFF0000) | ((X >> 8) & 0xff00) | ((X<<24) & 0xff000000)
+#define REVERSEENDIAN16(X) ((X>>8) & 0xff) | ((X<<8) & 0xFF00)
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -41,10 +44,6 @@ typedef struct
 
 u16 be16(const u8 *p);
 u32 be32(const u8 *p);
-u64 be64(const u8 *p);
-u64 be34(const u8 *p);
 
-u32 getcontentlength(WAD *wad, unsigned int contentnum);
+u32 getcontentlength(u8 *tmd, unsigned int contentnum);
 u32 addpadding(unsigned int inp, unsigned int padding);
-
-u32 toppc32(u32 in);

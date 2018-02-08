@@ -268,3 +268,6 @@ TestExtract/
 *.stackdump
 /gzinject/Debug
 /gzinject.zip
+*.bin
+Debug/
+/CppProperties.json
