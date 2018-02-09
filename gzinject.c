@@ -367,6 +367,7 @@ void do_pack(const char *outwad, const char *titleid) {
 	int i;
 	
 	u32 paddedsize = 0;
+	char *cfname = malloc(16);
 	for (i = 0; i < contentsc; i++) {
 		snprintf(cfname, 16, "content%d.app", i);
 		stat(cfname, &sbuffer);
