@@ -49,8 +49,6 @@ void do_extract(const char *inwad) {
 
 	mkdir("wadextract", 0755);
 
-	chdir("wadextract");
-
 	WAD* wad = (WAD*)malloc(sizeof(WAD));
 	FILE *wadfile = fopen(inwad, "rb");
 	fseek(wadfile, 0, SEEK_END);
@@ -60,6 +58,7 @@ void do_extract(const char *inwad) {
 	fread(wad->data, 1, wad->wadsize, wadfile);
 	fclose(wadfile);
 
+	chdir("wadextract");
 
 	wad->certsize = be32(wad->data + 0x08);
 	wad->tiksize = be32(wad->data + 0x10);
@@ -190,8 +189,8 @@ void do_extract(const char *inwad) {
 }
 
 void do_pack(const char *outwad, const char *titleid) {
-
 	chdir("wadextract");
+
 	WAD *wad = malloc(sizeof(WAD));
 	wad->datasize = 0;
 	struct stat sbuffer;
@@ -274,6 +273,7 @@ void do_pack(const char *outwad, const char *titleid) {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
+				
 				node = &nodes[j];
 				node->type = 0x0000;
 				node->name_offset = noff;
@@ -307,12 +307,13 @@ void do_pack(const char *outwad, const char *titleid) {
 	u32 curpos = 0;
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-
-			FILE *fle = fopen(ent->d_name, "rb");
-			fread(data + curpos, 1, sbuffer.st_size, fle);
-			fclose(fle);
-			curpos += addpadding(sbuffer.st_size, 32);
+			if (ent->d_type == DT_REG) {
+				stat(ent->d_name, &sbuffer);
+				FILE *fle = fopen(ent->d_name, "rb");
+				fread(data + curpos, 1, sbuffer.st_size, fle);
+				fclose(fle);
+				curpos += addpadding(sbuffer.st_size, 32);
+			}
 		}
 		closedir(dir);
 	}
@@ -364,7 +365,7 @@ void do_pack(const char *outwad, const char *titleid) {
 
 	u16 contentsc = be16(tmd + 0x1DE);
 	int i;
-	char *cfname = malloc(16);
+	
 	u32 paddedsize = 0;
 	for (i = 0; i < contentsc; i++) {
 		snprintf(cfname, 16, "content%d.app", i);
@@ -488,6 +489,8 @@ void do_pack(const char *outwad, const char *titleid) {
 
 	}
 	free(cfname);
+
+	chdir("..");
 
 	FILE *outwadfile = fopen(outwad, "wb");
 	char wadheader[8] = {
