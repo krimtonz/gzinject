@@ -9,24 +9,6 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 
 typedef struct {
-	u32 certsize;
-	u32 tiksize;
-	u32 tmdsize;
-	u32 datasize;
-	u32 footersize;
-
-	u32 certpos;
-	u32 tikpos;
-	u32 tmdpos;
-	u32 datapos;
-	u32 footerpos;
-	u32 contentcount;
-
-	size_t wadsize;
-	u8 *data;
-}WAD;
-
-typedef struct {
 	u16 type;
 	u16 name_offset;
 	u32 data_offset;

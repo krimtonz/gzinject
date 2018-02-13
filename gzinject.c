@@ -11,7 +11,7 @@
 
 unsigned char key[16];
 
-unsigned char newkey[16] = {
+const unsigned char newkey[16] = {
 	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
 };
 
@@ -48,56 +48,50 @@ void print_usage() {
 void do_extract(const char *inwad) {
 
 	mkdir("wadextract", 0755);
-
-	WAD* wad = (WAD*)malloc(sizeof(WAD));
 	FILE *wadfile = fopen(inwad, "rb");
 	fseek(wadfile, 0, SEEK_END);
-	wad->wadsize = ftell(wadfile);
+	size_t wadsize = ftell(wadfile);
 	fseek(wadfile, 0, SEEK_SET);
-	wad->data = (u8*)malloc(wad->wadsize);
-	fread(wad->data, 1, wad->wadsize, wadfile);
+	u8 *data = (u8*)malloc(wadsize);
+	fread(data, 1, wadsize, wadfile);
 	fclose(wadfile);
 
 	chdir("wadextract");
 
-	wad->certsize = be32(wad->data + 0x08);
-	wad->tiksize = be32(wad->data + 0x10);
-	wad->tmdsize = be32(wad->data + 0x14);
-	wad->datasize = be32(wad->data + 0x18);
-	wad->footersize = be32(wad->data + 0x1C);
+	u32 certsize = be32(data + 0x08);
+	u32 tiksize = be32(data + 0x10);
+	u32 tmdsize = be32(data + 0x14);
+	u32 datasize = be32(data + 0x18);
+	u32 footersize = be32(data + 0x1C);
 
-	wad->certpos = 0x40;
-	wad->tikpos = 0x40 + addpadding(wad->certsize, 64);
-	wad->tmdpos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64);
-	wad->datapos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64) + addpadding(wad->tmdsize, 64);
-	wad->footerpos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64) + addpadding(wad->tmdsize, 64) + addpadding(wad->datasize, 64);
+	u32 certpos = 0x40;
+	u32 tikpos = 0x40 + addpadding(certsize, 64);
+	u32 tmdpos = tikpos + addpadding(tiksize, 64);
+	u32 datapos = tmdpos + addpadding(tmdsize, 64);
+	u32 footerpos = addpadding(datasize, 64);
 
-	wad->contentcount = be16(wad->data + wad->tmdpos + 0x1de);
+	u16 contentcount = be16(data + tmdpos + 0x1de);
 
 	FILE* outfile = fopen("cert.cert", "wb");
-	fwrite(wad->data + wad->certpos, 1, wad->certsize, outfile);
+	fwrite(data + certpos, 1, certsize, outfile);
 	fclose(outfile);
 
 	outfile = fopen("tiket.tik", "wb");
-	fwrite(wad->data + wad->tikpos, 1, wad->tiksize, outfile);
+	fwrite(data + tikpos, 1, tiksize, outfile);
 	fclose(outfile);
 
 	outfile = fopen("metadata.tmd", "wb");
-	fwrite(wad->data + wad->tmdpos, 1, wad->tmdsize, outfile);
-	fclose(outfile);
-
-	outfile = fopen("footer.footer", "wb");
-	fwrite(wad->data + wad->footerpos, 1, wad->footersize, outfile);
+	fwrite(data + tmdpos, 1, tmdsize, outfile);
 	fclose(outfile);
 
 	unsigned char encryptedkey[16], iv[16];
 
-	u16 i, j;
+	u8 i, j;
 	for (i = 0; i < 16; i++) {
-		encryptedkey[i] = *(wad->data + wad->tikpos + 0x1bf + i);
+		encryptedkey[i] = data[tikpos + 0x1bf + i];
 	}
 	for (i = 0; i < 8; i++) {
-		iv[i] = *(wad->data + wad->tikpos + 0x1dc + i);
+		iv[i] = data[tikpos + 0x1dc + i];
 		iv[i + 8] = 0x00;
 	}
 
@@ -106,24 +100,24 @@ void do_extract(const char *inwad) {
 	AES_CBC_decrypt_buffer(aes, encryptedkey, 16);
 	free(aes);
 
-	for (j = 2; j < 15; j++) iv[j] = 0x00;
+	for (j = 2; j < 16; j++) iv[j] = 0x00;
 
-	for (i = 0; i < wad->contentcount; i++) {
-		u32 contentpos = wad->datapos;
+	for (i = 0; i < contentcount; i++) {
+		u32 contentpos = datapos;
 		for (j = 0; j < i; j++) {
-			contentpos = contentpos + addpadding(getcontentlength(wad->data + wad->tmdpos, j), 64);
+			contentpos = contentpos + addpadding(getcontentlength(data + tmdpos, j), 64);
 		}
 
-		iv[0] = wad->data[wad->tmdpos + 0x1e8 + (0x24 * i)];
-		iv[1] = wad->data[wad->tmdpos + 0x1e9 + (0x24 * i)];
+		iv[0] = data[tmdpos + 0x1e8 + (0x24 * i)];
+		iv[1] = data[tmdpos + 0x1e9 + (0x24 * i)];
 
 		aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 		AES_init_ctx_iv(aes, encryptedkey, iv);
 
 
 
-		u32 size = addpadding(getcontentlength(wad->data + wad->tmdpos, i), 16);
-		AES_CBC_decrypt_buffer(aes, wad->data + contentpos, size);
+		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
+		AES_CBC_decrypt_buffer(aes, data + contentpos, size);
 
 
 		free(aes);
@@ -137,24 +131,24 @@ void do_extract(const char *inwad) {
 			u8 *string_table;
 			size_t rest_size;
 
-			memcpy(&header, wad->data + contentpos, sizeof(header));
+			memcpy(&header, data + contentpos, sizeof(header));
 
 			int curpos = contentpos + sizeof(header);
 
 			u8_node root_node;
-			memcpy(&root_node, wad->data + curpos, sizeof(u8_node));
+			memcpy(&root_node, data + curpos, sizeof(u8_node));
 			curpos += sizeof(u8_node);
 
 			u32 nodec = be32((u8*)&root_node.size) - 1;
 
 			u8_node *nodes = malloc(sizeof(u8_node)*nodec);
-			memcpy(nodes, wad->data + curpos, sizeof(u8_node)*nodec);
+			memcpy(nodes, data + curpos, sizeof(u8_node)*nodec);
 			curpos += sizeof(u8_node)*nodec;
 
 			data_offset = be32((u8*)&header.data_offset);
 			rest_size = data_offset - sizeof(header) - (nodec + 1) * sizeof(u8_node);
 			string_table = malloc(rest_size);
-			memcpy(string_table, wad->data + curpos, rest_size);
+			memcpy(string_table, data + curpos, rest_size);
 
 			u8_node *node;
 			for (j = 0; j < nodec; j++) {
@@ -167,7 +161,7 @@ void do_extract(const char *inwad) {
 
 				if (type == 0x00) {
 					outfile = fopen(name, "wb");
-					fwrite(wad->data + contentpos + doffset, 1, dsize, outfile);
+					fwrite(data + contentpos + doffset, 1, dsize, outfile);
 					fclose(outfile);
 				}
 			}
@@ -179,48 +173,46 @@ void do_extract(const char *inwad) {
 		char *contentname = malloc(100);
 		snprintf(contentname, 100, "content%d.app", i);
 		outfile = fopen(contentname, "wb");
-		fwrite(wad->data + contentpos, 1, getcontentlength(wad->data + wad->tmdpos, i), outfile);
+		fwrite(data + contentpos, 1, getcontentlength(data + tmdpos, i), outfile);
 		fclose(outfile);
 		free(contentname);
 	}
-	free(wad->data);
-	free(wad);
+	free(data);
 
 }
 
 void do_pack(const char *outwad, const char *titleid) {
 	chdir("wadextract");
 
-	WAD *wad = malloc(sizeof(WAD));
-	wad->datasize = 0;
+	u32 datasize = 0;
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
-	wad->certsize = sbuffer.st_size;
-	wad->certpos = 0x40;
+	u32 certsize = sbuffer.st_size;
+	u32 certpos = 0x40;
 
 	stat("tiket.tik", &sbuffer);
-	wad->tiksize = sbuffer.st_size;
-	wad->tikpos = 0x40 + addpadding(wad->certsize, 64);
+	u32 tiksize = sbuffer.st_size;
+	u32 tikpos = certpos + addpadding(certsize, 64);
 
 	stat("metadata.tmd", &sbuffer);
-	wad->tmdsize = sbuffer.st_size;
-	wad->tmdpos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64);
+	u32 tmdsize = sbuffer.st_size;
+	u32 tmdpos = tikpos + addpadding(tiksize, 64);
 
-	wad->datapos = 0x40 + addpadding(wad->certsize, 64) + addpadding(wad->tiksize, 64) + addpadding(wad->tmdsize, 64);
+	u32 datapos = tmdpos + addpadding(tmdsize, 64);
 
 	FILE *infile = fopen("cert.cert", "rb");
-	u8 *cert = malloc(addpadding(wad->certsize, 64));
-	fread(cert, 1, wad->certsize, infile);
+	u8 *cert = malloc(addpadding(certsize, 64));
+	fread(cert, 1, certsize, infile);
 	fclose(infile);
 
 	infile = fopen("tiket.tik", "rb");
-	u8 *tik = malloc(addpadding(wad->tiksize, 64));
-	fread(tik, 1, wad->tiksize, infile);
+	u8 *tik = malloc(addpadding(tiksize, 64));
+	fread(tik, 1, tiksize, infile);
 	fclose(infile);
 
 	infile = fopen("metadata.tmd", "rb");
-	u8 *tmd = malloc(addpadding(wad->tmdsize, 64));
-	fread(tmd, 1, wad->tmdsize, infile);
+	u8 *tmd = malloc(addpadding(tmdsize, 64));
+	fread(tmd, 1, tmdsize, infile);
 	fclose(infile);
 
 	u8 *footer = malloc(0x40);
@@ -229,16 +221,14 @@ void do_pack(const char *outwad, const char *titleid) {
 	footer[1] = 0x5A;
 	time_t curtime = time(NULL);
 	memcpy(footer + 2, &curtime, sizeof(time_t));
-	wad->footersize = 0x40;
+	u32 footersize = 0x40;
 
 	// Build Content5 into a .app file first
 	DIR *dir;
 	struct dirent *ent;
 
-	u16 nodec = 0;
-
-
-
+	u8 nodec = 0;
+	
 	chdir("content5");
 
 	if ((dir = opendir(".")) != NULL) {
@@ -371,7 +361,7 @@ void do_pack(const char *outwad, const char *titleid) {
 	for (i = 0; i < contentsc; i++) {
 		snprintf(cfname, 16, "content%d.app", i);
 		stat(cfname, &sbuffer);
-		wad->datasize += addpadding(sbuffer.st_size, 64);
+		datasize += addpadding(sbuffer.st_size, 64);
 		paddedsize += addpadding(sbuffer.st_size, 64);
 		u32 size = REVERSEENDIAN32(sbuffer.st_size);
 		memcpy(tmd + 0x1f0 + (36 * i), &size, 4);
@@ -384,15 +374,8 @@ void do_pack(const char *outwad, const char *titleid) {
 
 	// Change Title ID
 	if (titleid != NULL) {
-		tik[0x1e0] = titleid[0];
-		tik[0x1e1] = titleid[1];
-		tik[0x1e2] = titleid[2];
-		tik[0x1e3] = titleid[3];
-
-		tmd[0x190] = titleid[0];
-		tmd[0x191] = titleid[1];
-		tmd[0x192] = titleid[2];
-		tmd[0x193] = titleid[3];
+		memcpy(tik + 0x1e0, titleid, 4);
+		memcpy(tmd + 0x190, titleid, 4);
 	}
 
 	// Region Free
@@ -500,28 +483,28 @@ void do_pack(const char *outwad, const char *titleid) {
 	char zeroes[4];
 	memset(&zeroes, 0, 4);
 
-	u32 certsize = REVERSEENDIAN32(wad->certsize);
-	u32 tiksize = REVERSEENDIAN32(wad->tiksize);
-	u32 tmdsize = REVERSEENDIAN32(wad->tmdsize);
-	u32 datasize = REVERSEENDIAN32(wad->datasize);
-	u32 footersize = REVERSEENDIAN32(wad->footersize);
+	u32 certsizer = REVERSEENDIAN32(certsize);
+	u32 tiksizer = REVERSEENDIAN32(tiksize);
+	u32 tmdsizer = REVERSEENDIAN32(tmdsize);
+	u32 datasizer = REVERSEENDIAN32(datasize);
+	u32 footersizer = REVERSEENDIAN32(footersize);
 
 	fwrite(&wadheader, 1, 8, outwadfile);
-	fwrite(&certsize, 1, 4, outwadfile);
+	fwrite(&certsizer, 1, 4, outwadfile);
 	fwrite(&zeroes, 1, 4, outwadfile);
-	fwrite(&tiksize, 1, 4, outwadfile);
-	fwrite(&tmdsize, 1, 4, outwadfile);
-	fwrite(&datasize, 1, 4, outwadfile);
-	fwrite(&footersize, 1, 4, outwadfile);
+	fwrite(&tiksizer, 1, 4, outwadfile);
+	fwrite(&tmdsizer, 1, 4, outwadfile);
+	fwrite(&datasizer, 1, 4, outwadfile);
+	fwrite(&footersizer, 1, 4, outwadfile);
 
 	char headerpadding[32];
 	memset(&headerpadding, 0, 32);
 	fwrite(&headerpadding, 1, 32, outwadfile);
 
-	fwrite(cert, 1, addpadding(wad->certsize, 64), outwadfile);
-	fwrite(tik, 1, addpadding(wad->tiksize, 64), outwadfile);
-	fwrite(tmd, 1, addpadding(wad->tmdsize, 64), outwadfile);
-	fwrite(contents, 1, addpadding(wad->datasize, 64), outwadfile);
+	fwrite(cert, 1, addpadding(certsize, 64), outwadfile);
+	fwrite(tik, 1, addpadding(tiksize, 64), outwadfile);
+	fwrite(tmd, 1, addpadding(tmdsize, 64), outwadfile);
+	fwrite(contents, 1, addpadding(datasize, 64), outwadfile);
 	fwrite(footer, 1, 0x40, outwadfile);
 	fclose(outwadfile);
 
@@ -531,7 +514,6 @@ void do_pack(const char *outwad, const char *titleid) {
 	free(tmd);
 	free(contents);
 	free(footer);
-	free(wad);
 
 }
 
