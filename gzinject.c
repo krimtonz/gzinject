@@ -8,6 +8,7 @@
 #include "gzinject.h"
 #include "aes.h"
 #include "sha1.h"
+#include "md5.h"
 
 unsigned char key[16];
 
@@ -42,7 +43,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	printf("gzinject extract|pack|genkey\r\n\textract: DonorWad - Extracts DonorWad to wadextract\r\n\tpack: OutWad - Packs wadextact into OutWad\r\n\tgenkey: generates common-key.bin\r\n");
+	printf("usage: gzinject extract|pack|genkey\r\n    extract: Extracts DonorWad to wadextract\r\n        DonorWad: The wad to extract from\r\n    pack [ChannelID] [ChannelName]: Packs wadextract into OutWad\r\n        OutWad: The wad to create\r\n        ChannelID: the new Channel ID (max 4 chars)\r\n        ChannelName: Change the title that shows in the Wii System Menu (max 20 chars)\r\n    genkey: generates common-key.bin\r\n");
 }
 
 void do_extract(const char *inwad) {
@@ -181,7 +182,7 @@ void do_extract(const char *inwad) {
 
 }
 
-void do_pack(const char *outwad, const char *titleid) {
+void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 	chdir("wadextract");
 
 	u32 datasize = 0;
@@ -418,6 +419,65 @@ void do_pack(const char *outwad, const char *titleid) {
 		FILE *cfile = fopen(cfname, "rb");
 		fread(contents + contentpos, 1, size, cfile);
 		fclose(cfile);
+		
+		if (i == 0) {
+			if (channelname != NULL) {
+				u16 imetpos = 0;
+				for (j = 0; j < 400; j++) {
+					if (contents[contentpos + j] == 0x49 && contents[contentpos + 1 + j] == 0x4D && contents[contentpos + 2 + j] == 0x45 && contents[contentpos + 3 + j] == 0x54) {
+						imetpos = j;
+						break;
+					}
+				}
+				u16 count;
+				size_t cnamelen = strlen(channelname);
+				for (j = imetpos; j < imetpos + 40; j += 2) {
+					// JP 
+					if (count < cnamelen) {
+						contents[contentpos + j + 29] = channelname[count];
+						contents[contentpos + j + 113] = channelname[count];
+						contents[contentpos + j + 197] = channelname[count];
+						contents[contentpos + j + 281] = channelname[count];
+						contents[contentpos + j + 365] = channelname[count];
+						contents[contentpos + j + 449] = channelname[count];
+						contents[contentpos + j + 533] = channelname[count];
+						contents[contentpos + j + 785] = channelname[count];
+						
+					}
+					else {
+						contents[contentpos + j + 29] = 0x00;
+						contents[contentpos + j + 113] = 0x00;
+						contents[contentpos + j + 197] = 0x00;
+						contents[contentpos + j + 281] = 0x00;
+						contents[contentpos + j + 365] = 0x00;
+						contents[contentpos + j + 449] = 0x00;
+						contents[contentpos + j + 533] = 0x00;
+						contents[contentpos + j + 785] = 0x00;
+					}
+
+					contents[contentpos + j + 28] = 0x00;
+					contents[contentpos + j + 112] = 0x00;
+					contents[contentpos + j + 196] = 0x00;
+					contents[contentpos + j + 280] = 0x00;
+					contents[contentpos + j + 364] = 0x00;
+					contents[contentpos + j + 448] = 0x00;
+					contents[contentpos + j + 532] = 0x00;
+					contents[contentpos + j + 784] = 0x00;
+					
+					count++;
+				}
+			}
+
+			MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
+			u8 md5digest[16];
+			MD5_Init(md5);
+			MD5_Update(md5, contents + contentpos + 64, 1536);
+			MD5_Final(md5digest, md5);
+			for (j = 0; j < 16; j++) {
+				contents[contentpos + 1584 + j] = md5digest[j];
+			}
+			free(md5);
+		}
 
 		if (i == 1) {
 			// Memory fix 
@@ -594,9 +654,10 @@ int main(int argc, char **argv) {
 	}
 	else if (strcmp(argv[1],"pack")==0) {
 		if (argc < 4)
-			do_pack(argv[2],NULL);
-		else
-			do_pack(argv[2], argv[3]);
+			do_pack(argv[2],NULL,NULL);
+		else if(argc<5)
+			do_pack(argv[2], argv[3], NULL);
+		else do_pack(argv[2], argv[3], argv[4]);
 	}
 
 

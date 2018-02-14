@@ -1,5 +1,5 @@
-gzinject: gzinject.o aes.o sha1.o
-	gcc gzinject.o aes.o sha1.o -o gzinject
+gzinject: gzinject.o aes.o sha1.o md5.o
+	gcc gzinject.o aes.o sha1.o md5.o -o gzinject
 
 gzinject.o: 
 	gcc -c -O3 gzinject.c -o gzinject.o
@@ -9,6 +9,9 @@ aes.o:
 
 sha1.o: 
 	gcc -c -O3 sha1.c -o sha1.o
+
+md5.o: 
+	gcc -c O3 md5.c -o md5.o
 
 install: gzinject
 	install gzinject /usr/bin
