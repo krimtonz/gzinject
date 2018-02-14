@@ -11,7 +11,7 @@ sha1.o:
 	gcc -c -O3 sha1.c -o sha1.o
 
 md5.o: 
-	gcc -c O3 md5.c -o md5.o
+	gcc -c -O3 md5.c -o md5.o
 
 install: gzinject
 	install gzinject /usr/bin
