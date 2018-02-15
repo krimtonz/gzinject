@@ -17,4 +17,4 @@ install: gzinject
 	install gzinject /usr/bin
 
 clean:
-	rm -rf gzinject.o aes.o sha1.o gzinject
+	rm -rf gzinject.o aes.o sha1.o md5.o gzinject

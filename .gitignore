@@ -271,3 +271,4 @@ TestExtract/
 Debug/
 CppProperties.json
 wadextract/
+*.o

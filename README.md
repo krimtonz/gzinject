@@ -6,14 +6,20 @@ gz (the practice rom).
 
 ## Usage 
 
-gzinject does 3 primary functions 
-**gzinject genkey** will generate common-key.bin in the current directory. This key is required for the other functions
-
-**gzinject extract InWad.wad** will extract all the content files to the wadextract as well as extracts the content5.app 
-U8 archive to wadextract/content5 so the rom from the wad file will be wadextract/content5/rom
-
-**gzinject pack OutWad.wad [ChannelID] [ChannelName]** pack wadextract/content5 into wadextract/content5.app, apply the memory/controller mappings to content1.app,
-change the title id if requested, change the channel name if requested, set the wad to be region free, then pack it all into Outwad.wad
+Usage: gzinject -a,--action=(genkey | extract | pack) [options]
+   options:
+     -a, --action (genkey | extract | pack)		Defines the action to run
+	   genkey: generates a common key
+	   extract: extracts contents of wadfile specified by --wad to --directory
+	   pack: packs contents --directory  into wad specified by --wad
+	 -w, --wad wadfile							Defines the wadfile to use Input wad for extracting, output wad for packing
+	 -d, --directory directory					Defines the output directory for extract operations, or the input directory for pack operations
+	 -i, --channelid channelid					Changes the channel id during packing (4 characters)
+	 -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
+	 -r, --region [0-3]							Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
+	 -k, --key keyfile							Uses the specified common key file
+	 -v, --verbose								Prints verbose information
+	 -?, --help									Prints this help message
 
 ## Thanks/Authors
 

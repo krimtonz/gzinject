@@ -5,12 +5,28 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#include <getopt.h>
 #include "gzinject.h"
 #include "aes.h"
 #include "sha1.h"
 #include "md5.h"
 
 unsigned char key[16];
+u8 region = 0x03;
+int verbose = 0;
+char *wad = NULL, *directory = NULL;
+
+static struct option cmdoptions[] = {
+	{ "action",required_argument,0,'a' },
+{ "wad",required_argument,0,'w' },
+{ "channelid",required_argument,0,'i' },
+{ "channeltitle",required_argument,0,'t' },
+{ "help",no_argument,0,'?' },
+{ "key",required_argument,0,'k' },
+{ "region",required_argument,0,'r' },
+{ "verbose",no_argument,&verbose,1 },
+{ "directory",required_argument,0,'d' }
+};
 
 const unsigned char newkey[16] = {
 	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
@@ -43,21 +59,29 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	printf("usage: gzinject extract|pack|genkey\r\n    extract: Extracts DonorWad to wadextract\r\n        DonorWad: The wad to extract from\r\n    pack [ChannelID] [ChannelName]: Packs wadextract into OutWad\r\n        OutWad: The wad to create\r\n        ChannelID: the new Channel ID (max 4 chars)\r\n        ChannelName: Change the title that shows in the Wii System Menu (max 20 chars)\r\n    genkey: generates common-key.bin\r\n");
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	printf("%s\r\n", usage);
 }
 
-void do_extract(const char *inwad) {
+void do_extract() {
+	struct stat sbuffer;
+	if (stat(wad, &sbuffer) != 0) {
+		printf("Could not open %s\r\n", wad);
+		exit(1);
+	}
 
-	mkdir("wadextract", 0755);
-	FILE *wadfile = fopen(inwad, "rb");
+	if (verbose == 1) {
+		printf("Extracting %s to %s\r\n", wad, directory);
+	}
+	mkdir(directory, 0755);
+	FILE *wadfile = fopen(wad, "rb");
 	fseek(wadfile, 0, SEEK_END);
 	size_t wadsize = ftell(wadfile);
 	fseek(wadfile, 0, SEEK_SET);
 	u8 *data = (u8*)malloc(wadsize);
 	fread(data, 1, wadsize, wadfile);
 	fclose(wadfile);
-
-	chdir("wadextract");
+	chdir(directory);
 
 	u32 certsize = be32(data + 0x08);
 	u32 tiksize = be32(data + 0x10);
@@ -73,14 +97,23 @@ void do_extract(const char *inwad) {
 
 	u16 contentcount = be16(data + tmdpos + 0x1de);
 
+	if (verbose == 1) {
+		printf("Writing cert.cert.\r\n");
+	}
 	FILE* outfile = fopen("cert.cert", "wb");
 	fwrite(data + certpos, 1, certsize, outfile);
 	fclose(outfile);
 
-	outfile = fopen("tiket.tik", "wb");
+	if (verbose == 1) {
+		printf("Writing ticket.tik.\r\n");
+	}
+	outfile = fopen("ticket.tik", "wb");
 	fwrite(data + tikpos, 1, tiksize, outfile);
 	fclose(outfile);
 
+	if (verbose == 1) {
+		printf("Writing metadata.tmd.\r\n");
+	}
 	outfile = fopen("metadata.tmd", "wb");
 	fwrite(data + tmdpos, 1, tmdsize, outfile);
 	fclose(outfile);
@@ -115,7 +148,9 @@ void do_extract(const char *inwad) {
 		aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 		AES_init_ctx_iv(aes, encryptedkey, iv);
 
-
+		if (verbose == 1) {
+			printf("Decrypting contents %d.\r\n", i);
+		}
 
 		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
 		AES_CBC_decrypt_buffer(aes, data + contentpos, size);
@@ -125,6 +160,9 @@ void do_extract(const char *inwad) {
 
 		// Main rom content file
 		if (i == 5) {
+			if (verbose == 1) {
+				printf("Extracting content 5 U8 Archive.\r\n");
+			}
 			mkdir("content5", 0755);
 			chdir("content5");
 			u8_header header;
@@ -161,6 +199,9 @@ void do_extract(const char *inwad) {
 				char *name = (char*)&string_table[name_offset];
 
 				if (type == 0x00) {
+					if (verbose == 1) {
+						printf("Extracting and writing content5/%s.\r\n", name);
+					}
 					outfile = fopen(name, "wb");
 					fwrite(data + contentpos + doffset, 1, dsize, outfile);
 					fclose(outfile);
@@ -173,6 +214,9 @@ void do_extract(const char *inwad) {
 
 		char *contentname = malloc(100);
 		snprintf(contentname, 100, "content%d.app", i);
+		if (verbose == 1) {
+			printf("Writing %s.\r\n", contentname);
+		}
 		outfile = fopen(contentname, "wb");
 		fwrite(data + contentpos, 1, getcontentlength(data + tmdpos, i), outfile);
 		fclose(outfile);
@@ -182,16 +226,35 @@ void do_extract(const char *inwad) {
 
 }
 
-void do_pack(const char *outwad, const char *titleid, const char *channelname) {
-	chdir("wadextract");
+void do_pack(char *titleid, const char *channelname) {
+	
+	DIR *testdir = opendir(directory);
+	if (testdir) {
+		closedir(testdir);
+	}
+	else {
+		printf("%s doesn't exit, or is not a directory!\r\n",directory);
+		exit(1);
+	}
 
+	if (verbose == 1) {
+		printf("Packing %s into %s", directory, wad);
+		if (titleid != NULL) printf(", changing Channel ID to %s", titleid);
+		if (channelname != NULL) printf(", changing Channel Name to %s", channelname);
+		printf("\r\n");
+	}
+	chdir(directory);
+
+	if (verbose == 1) {
+		printf("Gathering WAD Header Information\r\n");
+	}
 	u32 datasize = 0;
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
 	u32 certsize = sbuffer.st_size;
 	u32 certpos = 0x40;
 
-	stat("tiket.tik", &sbuffer);
+	stat("ticket.tik", &sbuffer);
 	u32 tiksize = sbuffer.st_size;
 	u32 tikpos = certpos + addpadding(certsize, 64);
 
@@ -201,21 +264,33 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 
 	u32 datapos = tmdpos + addpadding(tmdsize, 64);
 
+	if (verbose == 1) {
+		printf("Reading cert.cert\r\n");
+	}
 	FILE *infile = fopen("cert.cert", "rb");
 	u8 *cert = malloc(addpadding(certsize, 64));
 	fread(cert, 1, certsize, infile);
 	fclose(infile);
 
-	infile = fopen("tiket.tik", "rb");
+	if (verbose == 1) {
+		printf("Reading ticket.cert\r\n");
+	}
+	infile = fopen("ticket.tik", "rb");
 	u8 *tik = malloc(addpadding(tiksize, 64));
 	fread(tik, 1, tiksize, infile);
 	fclose(infile);
 
+	if (verbose == 1) {
+		printf("Reading metadata.tmd\r\n");
+	}
 	infile = fopen("metadata.tmd", "rb");
 	u8 *tmd = malloc(addpadding(tmdsize, 64));
 	fread(tmd, 1, tmdsize, infile);
 	fclose(infile);
 
+	if (verbose == 1) {
+		printf("Generating Fooder signature\r\n");
+	}
 	u8 *footer = malloc(0x40);
 	memset(footer, 0, 0x40);
 	footer[0] = 0x47;
@@ -229,9 +304,11 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 	struct dirent *ent;
 
 	u8 nodec = 0;
-	
-	chdir("content5");
 
+	chdir("content5");
+	if (verbose == 1) {
+		printf("Generating content5 U8 Archive information\r\n");
+	}
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
@@ -264,7 +341,7 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
-				
+
 				node = &nodes[j];
 				node->type = 0x0000;
 				node->name_offset = noff;
@@ -296,14 +373,23 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 
 	u8 *data = malloc(sizeof(u8) * doff);
 	u32 curpos = 0;
+
+	if (verbose == 1) {
+		printf("Reading U8 Archive Files\r\n");
+	}
+
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
+				if (verbose == 1) {
+					printf("Reading wadextract/content5/%s\r\n", ent->d_name);
+				}
 				stat(ent->d_name, &sbuffer);
 				FILE *fle = fopen(ent->d_name, "rb");
 				fread(data + curpos, 1, sbuffer.st_size, fle);
 				fclose(fle);
 				curpos += addpadding(sbuffer.st_size, 32);
+
 			}
 		}
 		closedir(dir);
@@ -312,6 +398,9 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 
 	chdir("..");
 
+	if (verbose == 1) {
+		printf("Exporting new U8 Archive to content5.app\r\n");
+	}
 	u8_node *rootnode = malloc(sizeof(u8_node));
 	rootnode->name_offset = 0x00;
 	rootnode->data_offset = 0x00;
@@ -353,10 +442,12 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 	fwrite(data, 1, doff, foutfile);
 	fclose(foutfile);
 
-
+	if (verbose == 1) {
+		printf("Modifying content metadata in the TMD\r\n");
+	}
 	u16 contentsc = be16(tmd + 0x1DE);
 	int i;
-	
+
 	u32 paddedsize = 0;
 	char *cfname = malloc(16);
 	for (i = 0; i < contentsc; i++) {
@@ -375,13 +466,22 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 
 	// Change Title ID
 	if (titleid != NULL) {
+		if (verbose == 1) {
+			printf("Changing Channel ID\r\n");
+		}
 		memcpy(tik + 0x1e0, titleid, 4);
 		memcpy(tmd + 0x190, titleid, 4);
 	}
 
-	// Region Free
-	tmd[0x19d] = 0x03;
+	if (verbose == 1) {
+		printf("Changing region in the TMD\r\n");
+	}
+	// Change the Region
+	tmd[0x19d] = region;
 
+	if (verbose == 1) {
+		printf("Changing encryption key in the ticket\r\n");
+	}
 	// New key
 	memcpy(tik + 0x1bf, &newkey, 16);
 
@@ -419,9 +519,13 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 		FILE *cfile = fopen(cfname, "rb");
 		fread(contents + contentpos, 1, size, cfile);
 		fclose(cfile);
-		
+
 		if (i == 0) {
 			if (channelname != NULL) {
+				if (verbose == 1) {
+					printf("Changing the Channel Name in content0.app\r\n");
+				}
+
 				u16 imetpos = 0;
 				for (j = 0; j < 400; j++) {
 					if (contents[contentpos + j] == 0x49 && contents[contentpos + 1 + j] == 0x4D && contents[contentpos + 2 + j] == 0x45 && contents[contentpos + 3 + j] == 0x54) {
@@ -432,7 +536,8 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 				u16 count;
 				size_t cnamelen = strlen(channelname);
 				for (j = imetpos; j < imetpos + 40; j += 2) {
-					// JP 
+
+
 					if (count < cnamelen) {
 						contents[contentpos + j + 29] = channelname[count];
 						contents[contentpos + j + 113] = channelname[count];
@@ -442,7 +547,7 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 						contents[contentpos + j + 449] = channelname[count];
 						contents[contentpos + j + 533] = channelname[count];
 						contents[contentpos + j + 785] = channelname[count];
-						
+
 					}
 					else {
 						contents[contentpos + j + 29] = 0x00;
@@ -463,11 +568,14 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 					contents[contentpos + j + 448] = 0x00;
 					contents[contentpos + j + 532] = 0x00;
 					contents[contentpos + j + 784] = 0x00;
-					
+
 					count++;
 				}
 			}
 
+			if (verbose == 1) {
+				printf("Signing the new Channel Name\r\n");
+			}
 			MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
 			u8 md5digest[16];
 			MD5_Init(md5);
@@ -480,28 +588,45 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 		}
 
 		if (i == 1) {
+			if (verbose == 1) {
+				printf("Applying GZ Fixes\r\n\tMemory\r\n");
+			}
+
+
 			// Memory fix 
 			contents[contentpos + 0x2EB0] = 0x60;
 			contents[contentpos + 0x2EB1] = 0x00;
 			contents[contentpos + 0x2EB3] = 0x00;
 
+			if (verbose == 1) {
+				printf("\tController D-Pad Up\r\n");
+			}
 			// Mapping fix
 			// DUP
 			contents[contentpos + 0x16BAF0] = 0x08;
 			contents[contentpos + 0x16BAF1] = 0x00;
 
+			if (verbose == 1) {
+				printf("\tController D-Pad Down\r\n");
+			}
 			// DDown
 			contents[contentpos + 0x16BAF4] = 0x04;
 			contents[contentpos + 0x16BAF5] = 0x00;
-
+			if (verbose == 1) {
+				printf("\tController D-Pad Left\r\n");
+			}
 			// DLEFT
 			contents[contentpos + 0x16BAF8] = 0x02;
 			contents[contentpos + 0x16BAF9] = 0x00;
-
+			if (verbose == 1) {
+				printf("\tController D-Pad Right\r\n");
+			}
 			// DRIGHT
 			contents[contentpos + 0x16BAFC] = 0x01;
 			contents[contentpos + 0x16BAFD] = 0x00;
-
+			if (verbose == 1) {
+				printf("\tController C-Stick-Down to L\r\n");
+			}
 			// CStick Down -> L
 			contents[contentpos + 0x16BB05] = 0x20;
 		}
@@ -510,7 +635,9 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 		iv[1] = tmd[0x1e9 + (0x24 * i)];
 
 
-
+		if (verbose == 1) {
+			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
+		}
 		// Generate a SHA signature incase any files are changes 1 and 5 will most likely be the only one changed. 
 		char digest[20];
 		SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
@@ -522,7 +649,9 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 		memcpy(tmd + 0x1f4 + (36 * i), &digest, 20);
 		free(sha1);
 
-
+		if (verbose == 1) {
+			printf("Encrypting content %d\r\n", i);
+		}
 		aes = malloc(sizeof(struct AES_ctx));
 		AES_init_ctx_iv(aes, newenc, iv);
 
@@ -536,7 +665,11 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 
 	chdir("..");
 
-	FILE *outwadfile = fopen(outwad, "wb");
+	if (verbose == 1) {
+		printf("Generating WAD Header, and flipping endianness\r\n");
+	}
+
+	FILE *outwadfile = fopen(wad, "wb");
 	char wadheader[8] = {
 		0x00, 0x00, 0x00, 0x20, 0x49, 0x73, 0x00, 0x00
 	};
@@ -561,14 +694,29 @@ void do_pack(const char *outwad, const char *titleid, const char *channelname) {
 	memset(&headerpadding, 0, 32);
 	fwrite(&headerpadding, 1, 32, outwadfile);
 
+	if (verbose == 1) {
+		printf("Writing certificate\r\n");
+	}
 	fwrite(cert, 1, addpadding(certsize, 64), outwadfile);
+	if (verbose == 1) {
+		printf("Writing ticket\r\n");
+	}
 	fwrite(tik, 1, addpadding(tiksize, 64), outwadfile);
+	if (verbose == 1) {
+		printf("Writing medatadata\r\n");
+	}
 	fwrite(tmd, 1, addpadding(tmdsize, 64), outwadfile);
+	if (verbose == 1) {
+		printf("Writing data\r\n");
+	}
 	fwrite(contents, 1, addpadding(datasize, 64), outwadfile);
+	if (verbose == 1) {
+		printf("Writing footer\r\n");
+	}
 	fwrite(footer, 1, 0x40, outwadfile);
 	fclose(outwadfile);
 
-	
+
 	free(cert);
 	free(tik);
 	free(tmd);
@@ -607,41 +755,96 @@ void genkey() {
 }
 
 int main(int argc, char **argv) {
-	if (argc < 2) {
-		
-		print_usage();
-		exit(0);
+	int opt;
+
+	char *action = NULL,
+		*channelid = NULL,
+		*channeltitle = NULL,
+		*keyfile = NULL;
+
+	while (1) {
+		int oi = 0;
+
+		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:", cmdoptions, &oi);
+		if (opt == -1) break;
+		switch (opt) {
+		case 'a':
+			action = optarg;
+			break;
+		case 'w':
+			wad = optarg;
+			break;
+		case 'i':
+			channelid = optarg;
+			break;
+		case 't':
+			channeltitle = optarg;
+			break;
+		case '?':
+			print_usage();
+			exit(0);
+			break;
+		case 'k':
+			keyfile = optarg;
+			break;
+		case 'r':
+			if (optarg[0] == '0') region = 0;
+			else if (optarg[0] == '1') region = 1;
+			else if (optarg[0] == '2') region = 2;
+			else region = 3;
+			break;
+		case 'd':
+			directory = optarg;
+			break;
+		default:
+			break;
+		}
+
 	}
 
-	if (strcmp(argv[1],"genkey")==0) {
-		
+	if (action == NULL) {
+		print_usage();
+		exit(1);
+	}
+
+	if (strcmp(action, "genkey") == 0) {
+
 		genkey();
 		return 0;
 	}
 
-	if (argc < 3) {
-		
-		print_usage();
-		exit(0);
-	}
-
-	if (strcmp(argv[1],"extract")==0 && strcmp(argv[1],"pack")==0) {
+	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0) {
 
 		print_usage();
 		exit(0);
 	}
+
+
+	if (wad == NULL) {
+		print_usage();
+		exit(1);
+	}
+
+	if (directory == NULL) directory = "wadextract";
 
 	struct stat sbuffer;
-	char *keyfile;
-	if (stat("key.bin", &sbuffer) == 0) {
-		keyfile = "key.bin";
-	}
-	else if (stat("common-key.bin", &sbuffer) == 0) {
-		keyfile = "common-key.bin";
+	if (keyfile == NULL) {
+		if (stat("key.bin", &sbuffer) == 0) {
+			keyfile = "key.bin";
+		}
+		else if (stat("common-key.bin", &sbuffer) == 0) {
+			keyfile = "common-key.bin";
+		}
+		else {
+			printf("Cannot find key.bin or common-key.bin.");
+			exit(1);
+		}
 	}
 	else {
-		printf("Cannot find key.bin or common-key.bin.");
-		exit(1);
+		if (stat(keyfile, &sbuffer) != 0) {
+			printf("Cannot find keyfile specified.");
+			exit(1);
+		}
 	}
 
 	FILE *fkeyfile = fopen(keyfile, "rb");
@@ -649,18 +852,12 @@ int main(int argc, char **argv) {
 	fclose(fkeyfile);
 
 
-	if (strcmp(argv[1],"extract")==0) {
-		do_extract(argv[2]);
+	if (strcmp(action, "extract") == 0) {
+		do_extract();
 	}
-	else if (strcmp(argv[1],"pack")==0) {
-		if (argc < 4)
-			do_pack(argv[2],NULL,NULL);
-		else if(argc<5)
-			do_pack(argv[2], argv[3], NULL);
-		else do_pack(argv[2], argv[3], argv[4]);
+	else if (strcmp(action, "pack") == 0) {
+		do_pack(channelid, channeltitle);
 	}
-
-
 
 	return 0;
 }
