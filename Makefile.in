@@ -1,0 +1,21 @@
+CC=gcc
+CFLAGS = -O3 -Wall
+prefix 	= @prefix@
+exec_prefix = @exec_prefix@
+bindir	= @bindir@
+
+OBJ = gzinject.o aes.o sha1.o md5.o
+
+$(ODIR)/%.o: %.c
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+gzinject: $(OBJ) 
+	$(CC) -o $@ $^
+
+.PHONY: clean
+
+clean:
+	rm -f *.o gzinject
+
+install:
+	install gzinject $(bindir)

@@ -86,14 +86,11 @@ void do_extract() {
 	u32 certsize = be32(data + 0x08);
 	u32 tiksize = be32(data + 0x10);
 	u32 tmdsize = be32(data + 0x14);
-	u32 datasize = be32(data + 0x18);
-	u32 footersize = be32(data + 0x1C);
 
 	u32 certpos = 0x40;
 	u32 tikpos = 0x40 + addpadding(certsize, 64);
 	u32 tmdpos = tikpos + addpadding(tiksize, 64);
 	u32 datapos = tmdpos + addpadding(tmdsize, 64);
-	u32 footerpos = addpadding(datasize, 64);
 
 	u16 contentcount = be16(data + tmdpos + 0x1de);
 
@@ -252,17 +249,12 @@ void do_pack(char *titleid, const char *channelname) {
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
 	u32 certsize = sbuffer.st_size;
-	u32 certpos = 0x40;
 
 	stat("ticket.tik", &sbuffer);
 	u32 tiksize = sbuffer.st_size;
-	u32 tikpos = certpos + addpadding(certsize, 64);
 
 	stat("metadata.tmd", &sbuffer);
 	u32 tmdsize = sbuffer.st_size;
-	u32 tmdpos = tikpos + addpadding(tiksize, 64);
-
-	u32 datapos = tmdpos + addpadding(tmdsize, 64);
 
 	if (verbose == 1) {
 		printf("Reading cert.cert\r\n");
@@ -449,9 +441,9 @@ void do_pack(char *titleid, const char *channelname) {
 	int i;
 
 	u32 paddedsize = 0;
-	char *cfname = malloc(16);
+	char *cfname = malloc(20);
 	for (i = 0; i < contentsc; i++) {
-		snprintf(cfname, 16, "content%d.app", i);
+		snprintf(cfname, 20, "content%d.app", i);
 		stat(cfname, &sbuffer);
 		datasize += addpadding(sbuffer.st_size, 64);
 		paddedsize += addpadding(sbuffer.st_size, 64);
@@ -461,8 +453,6 @@ void do_pack(char *titleid, const char *channelname) {
 
 	u8 *contents = malloc(paddedsize);
 	memset(contents, 0, paddedsize);
-	u32 dpos = 0;
-
 
 	// Change Title ID
 	if (titleid != NULL) {
@@ -486,7 +476,7 @@ void do_pack(char *titleid, const char *channelname) {
 	memcpy(tik + 0x1bf, &newkey, 16);
 
 	//Decrypt the new key
-	char newenc[16];
+	u8 newenc[16];
 	u8 iv[16];
 
 	for (i = 0; i < 16; i++) {
@@ -515,7 +505,7 @@ void do_pack(char *titleid, const char *channelname) {
 
 		u32 size = addpadding(getcontentlength(tmd, i), 16);
 
-		snprintf(cfname, 16, "content%d.app", i);
+		snprintf(cfname, 20, "content%d.app", i);
 		FILE *cfile = fopen(cfname, "rb");
 		fread(contents + contentpos, 1, size, cfile);
 		fclose(cfile);
@@ -533,7 +523,7 @@ void do_pack(char *titleid, const char *channelname) {
 						break;
 					}
 				}
-				u16 count;
+				u16 count=0;
 				size_t cnamelen = strlen(channelname);
 				for (j = imetpos; j < imetpos + 40; j += 2) {
 
@@ -639,7 +629,7 @@ void do_pack(char *titleid, const char *channelname) {
 			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
 		}
 		// Generate a SHA signature incase any files are changes 1 and 5 will most likely be the only one changed. 
-		char digest[20];
+		u8 digest[20];
 		SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
 		SHA1Init(sha1);
 		SHA1Update(sha1, contents + contentpos, getcontentlength(tmd, i));
@@ -730,9 +720,9 @@ void genkey() {
 	char *line = malloc(4);
 	fgets(line, 4, stdin);
 
-	char outkey[16] = { 0x26 ,0xC2 ,0x12 ,0xB3 ,0x60 ,0xDD ,0x2E ,0x04 ,0xCF ,0x9C ,0x12 ,0x51 ,0xAF ,0x99 ,0x88 ,0xE4 };
+	u8 outkey[16] = { 0x26 ,0xC2 ,0x12 ,0xB3 ,0x60 ,0xDD ,0x2E ,0x04 ,0xCF ,0x9C ,0x12 ,0x51 ,0xAF ,0x99 ,0x88 ,0xE4 };
 
-	char iv[16];
+	u8 iv[16];
 	iv[0] = line[0];
 	iv[1] = line[1];
 	iv[2] = line[2];
