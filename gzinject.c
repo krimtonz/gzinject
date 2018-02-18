@@ -11,10 +11,16 @@
 #include "sha1.h"
 #include "md5.h"
 
+#if _WIN32
+#define mkdir(X,Y) _mkdir(X);
+#define getcwd(X,Y) _getcwd(X,Y);
+#endif
+
 unsigned char key[16];
 u8 region = 0x03;
 int verbose = 0;
-char *wad = NULL, *directory = NULL;
+char *wad = NULL, *directory = NULL, *keyfile = NULL,
+	*workingdirectory = NULL;
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -223,14 +229,14 @@ void do_extract() {
 
 }
 
-void do_pack(char *titleid, const char *channelname) {
-	
+void do_pack(const char *titleid, const char *channelname) {
+
 	DIR *testdir = opendir(directory);
 	if (testdir) {
 		closedir(testdir);
 	}
 	else {
-		printf("%s doesn't exit, or is not a directory!\r\n",directory);
+		printf("%s doesn't exit, or is not a directory!\r\n", directory);
 		exit(1);
 	}
 
@@ -310,7 +316,7 @@ void do_pack(char *titleid, const char *channelname) {
 		closedir(dir);
 	}
 
-	u8_node *nodes = malloc(sizeof(u8_node)*nodec);
+	u8_node *nodes = malloc(sizeof(u8_node)* (nodec + 1));
 
 	u8 *string_table = malloc(nodec * 100 * sizeof(u8)); // Assume max 100 char per filename
 	memset(string_table, 0, (nodec * 100 * sizeof(u8)));
@@ -363,13 +369,14 @@ void do_pack(char *titleid, const char *channelname) {
 		prevchar = string_table[k];
 	}
 
+	
+
 	u8 *data = malloc(sizeof(u8) * doff);
 	u32 curpos = 0;
 
 	if (verbose == 1) {
 		printf("Reading U8 Archive Files\r\n");
 	}
-
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
 			if (ent->d_type == DT_REG) {
@@ -393,45 +400,54 @@ void do_pack(char *titleid, const char *channelname) {
 	if (verbose == 1) {
 		printf("Exporting new U8 Archive to content5.app\r\n");
 	}
-	u8_node *rootnode = malloc(sizeof(u8_node));
-	rootnode->name_offset = 0x00;
-	rootnode->data_offset = 0x00;
-	rootnode->size = nodec + 2;
-	rootnode->type = 0x0001;
+	
+	
+	
+	u8_header header;
+	header.tag = 0x2D38AA55; // 0x55AA382D 
+	header.rootnode_offset = 0x20; // 0x00000020
+	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
+	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
+	memset(header.zeroes, 0, 16);
 
-	u8_header *header = malloc(sizeof(u8_header));
-	header->tag = 0x2D38AA55; // 0x55AA382D 
-	header->rootnode_offset = 0x20; // 0x00000020
-	header->header_size = k + ((nodec + 2) * sizeof(u8_node));
-	header->data_offset = addpadding(header->rootnode_offset + header->header_size, 0x20);
-	memset(header->zeroes, 0, 16);
+	u32 dataoffset = header.data_offset;
+	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
+	
+	
+	FILE *foutfile = fopen("content5.app", "wb");
 
-	u32 dataoffset = header->data_offset;
-	u16 padcount = header->data_offset - (header->header_size + header->rootnode_offset);
-	char *padding = malloc(padcount);
-	memset(padding, 0, padcount);
+	header.header_size = REVERSEENDIAN32(header.header_size);
+	header.data_offset = REVERSEENDIAN32(header.data_offset);
+	header.rootnode_offset = REVERSEENDIAN32(header.rootnode_offset);
+	fwrite(&header, 1, sizeof(u8_header), foutfile);
 
-	header->header_size = REVERSEENDIAN32(header->header_size);
-	header->data_offset = REVERSEENDIAN32(header->data_offset);
-	header->rootnode_offset = REVERSEENDIAN32(header->rootnode_offset);
+	u8_node rootnode;
+	rootnode.name_offset = 0x00;
+	rootnode.data_offset = 0x00;
+	rootnode.size = nodec + 2;
+	rootnode.type = 0x0001;
+	rootnode.size = REVERSEENDIAN32(rootnode.size);
+	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
 
-	rootnode->size = REVERSEENDIAN32(rootnode->size);
-
-	for (j = 1; j <= nodec; j++) {
+	for (j = 1; j < nodec; j++) {
 		node = &nodes[j];
 		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
 		node->size = REVERSEENDIAN32(node->size);
 		node->name_offset = REVERSEENDIAN16(node->name_offset);
 	}
-
-	FILE *foutfile = fopen("content5.app", "wb");
-
-	fwrite(header, 1, sizeof(u8_header), foutfile);
-	fwrite(rootnode, 1, sizeof(u8_node), foutfile);
 	fwrite(nodes, 1, sizeof(u8_node) * (nodec + 1), foutfile);
+	free(nodes);
+	
 	fwrite(string_table, 1, k, foutfile);
+	free(string_table);
+
+	u8 *padding = calloc(padcount, sizeof(u8));
 	fwrite(padding, 1, padcount, foutfile);
+	free(padding);
+
 	fwrite(data, 1, doff, foutfile);
+	free(data);
+
 	fclose(foutfile);
 
 	if (verbose == 1) {
@@ -451,8 +467,7 @@ void do_pack(char *titleid, const char *channelname) {
 		memcpy(tmd + 0x1f0 + (36 * i), &size, 4);
 	};
 
-	u8 *contents = malloc(paddedsize);
-	memset(contents, 0, paddedsize);
+	u8 *contents = calloc(paddedsize, sizeof(u8));
 
 	// Change Title ID
 	if (titleid != NULL) {
@@ -523,7 +538,7 @@ void do_pack(char *titleid, const char *channelname) {
 						break;
 					}
 				}
-				u16 count=0;
+				u16 count = 0;
 				size_t cnamelen = strlen(channelname);
 				for (j = imetpos; j < imetpos + 40; j += 2) {
 
@@ -653,7 +668,7 @@ void do_pack(char *titleid, const char *channelname) {
 	}
 	free(cfname);
 
-	chdir("..");
+	chdir(workingdirectory);
 
 	if (verbose == 1) {
 		printf("Generating WAD Header, and flipping endianness\r\n");
@@ -736,12 +751,12 @@ void genkey() {
 
 	free(line);
 	free(aes);
-
-	FILE *keyf = fopen("common-key.bin", "wb");
+	if (keyfile == NULL)  keyfile = "common-key.bin";
+	FILE *keyf = fopen(keyfile, "wb");
 	fwrite(&outkey, 1, 16, keyf);
 	fclose(keyf);
 
-	printf("common-key.bin successfully generated!\r\n");
+	printf("%s successfully generated!\r\n",keyfile);
 }
 
 int main(int argc, char **argv) {
@@ -749,8 +764,7 @@ int main(int argc, char **argv) {
 
 	char *action = NULL,
 		*channelid = NULL,
-		*channeltitle = NULL,
-		*keyfile = NULL;
+		*channeltitle = NULL;
 
 	while (1) {
 		int oi = 0;
@@ -826,13 +840,13 @@ int main(int argc, char **argv) {
 			keyfile = "common-key.bin";
 		}
 		else {
-			printf("Cannot find key.bin or common-key.bin.");
+			printf("Cannot find key.bin or common-key.bin.\r\n");
 			exit(1);
 		}
 	}
 	else {
 		if (stat(keyfile, &sbuffer) != 0) {
-			printf("Cannot find keyfile specified.");
+			printf("Cannot find keyfile specified.\r\n");
 			exit(1);
 		}
 	}
@@ -841,6 +855,8 @@ int main(int argc, char **argv) {
 	fread(&key, 1, 16, fkeyfile);
 	fclose(fkeyfile);
 
+	workingdirectory = malloc(200);
+	workingdirectory = getcwd(workingdirectory, 200);
 
 	if (strcmp(action, "extract") == 0) {
 		do_extract();
@@ -848,6 +864,9 @@ int main(int argc, char **argv) {
 	else if (strcmp(action, "pack") == 0) {
 		do_pack(channelid, channeltitle);
 	}
+
+	free(workingdirectory);
+
 
 	return 0;
 }
