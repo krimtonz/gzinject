@@ -272,3 +272,5 @@ Debug/
 CppProperties.json
 wadextract/
 *.o
+Makefile
+config.*
