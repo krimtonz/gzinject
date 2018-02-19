@@ -12,7 +12,7 @@
 #include "md5.h"
 
 #if _WIN32
-#define mkdir(X,Y) _mkdir(X);
+#define mkdir(X,Y) mkdir(X)
 #define getcwd(X,Y) _getcwd(X,Y);
 #endif
 
@@ -309,7 +309,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	}
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
-			if (ent->d_type == DT_REG) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
 				nodec++;
 			}
 		}
@@ -338,7 +339,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	if ((dir = opendir(".")) != NULL) {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
-			if (ent->d_type == DT_REG) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
 
 				node = &nodes[j];
 				node->type = 0x0000;
@@ -379,7 +381,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	}
 	if ((dir = opendir(".")) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
-			if (ent->d_type == DT_REG) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
 				if (verbose == 1) {
 					printf("Reading wadextract/content5/%s\r\n", ent->d_name);
 				}
@@ -429,7 +432,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	rootnode.size = REVERSEENDIAN32(rootnode.size);
 	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
 
-	for (j = 1; j < nodec; j++) {
+	for (j = 1; j <= nodec; j++) {
 		node = &nodes[j];
 		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
 		node->size = REVERSEENDIAN32(node->size);
@@ -581,13 +584,16 @@ void do_pack(const char *titleid, const char *channelname) {
 			if (verbose == 1) {
 				printf("Signing the new Channel Name\r\n");
 			}
+
+			memset(&contents[contentpos + 0x630], 0x00, 0x10);
+
 			MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
 			u8 md5digest[16];
 			MD5_Init(md5);
 			MD5_Update(md5, contents + contentpos + 64, 1536);
 			MD5_Final(md5digest, md5);
 			for (j = 0; j < 16; j++) {
-				contents[contentpos + 1584 + j] = md5digest[j];
+				contents[contentpos + 0x630 + j] = md5digest[j];
 			}
 			free(md5);
 		}
