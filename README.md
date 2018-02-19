@@ -25,7 +25,8 @@ Usage: gzinject -a,--action=(genkey | extract | pack) [options]
 
 ## Thanks/Authors
 
-gzinject was primarily written by me, Thanks to glankk (https://github.com/glankk) for the memory/controller fixes.
+gzinject was primarily written by me, Thanks to glankk (https://github.com/glankk) for the memory/controller fixes, 
+as well as debugging, testing, and providing fixes for various errors
 The general workflow of extracting/packing the wad was taken from showmiiwads (https://github.com/dnasdw/showmiiwads/)
 AES encryption/decryption was taken from kokke (https://github.com/kokke/tiny-AES-c)
 SHA1 taken from clibs (https://github.com/clibs/sha1), MD5 taken from Alexander Peslyak
