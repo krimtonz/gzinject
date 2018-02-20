@@ -69,6 +69,37 @@ void print_usage() {
 	printf("%s\r\n", usage);
 }
 
+void truchasign(u8 *data, u8 type, size_t len) {
+	u16 pos = 0x1f2;
+	if (type == W_TMD) {
+		pos = 0x1d4;
+	}
+	u8 digest[20];
+	SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
+	SHA1Init(sha1);
+	SHA1Update(sha1, data + pos, len - 0x140);
+	SHA1Final(digest, sha1);
+	free(sha1);
+	u16 i;
+	if (digest[0] != 0x00) {
+		for (i = 4; i < 260; i++) {
+			data[i] = 0x00;
+		}
+		for (i = 0; i < 0xFFFF; i++) {
+			u16 revi = REVERSEENDIAN16(i);
+			memcpy(data + pos,	&revi	, 2);
+			sha1 = malloc(sizeof(SHA1_CTX));
+			SHA1Init(sha1);
+			SHA1Update(sha1, data + pos, len - 0x140);
+			SHA1Final(digest, sha1);
+			if (digest[0] == 0x00) {
+				break;
+			}
+			free(sha1);
+		}
+	}
+}
+
 void do_extract() {
 	struct stat sbuffer;
 	if (stat(wad, &sbuffer) != 0) {
@@ -266,7 +297,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading cert.cert\r\n");
 	}
 	FILE *infile = fopen("cert.cert", "rb");
-	u8 *cert = malloc(addpadding(certsize, 64));
+	u8 *cert = calloc(addpadding(certsize, 64),sizeof(u8)	);
 	fread(cert, 1, certsize, infile);
 	fclose(infile);
 
@@ -274,7 +305,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading ticket.cert\r\n");
 	}
 	infile = fopen("ticket.tik", "rb");
-	u8 *tik = malloc(addpadding(tiksize, 64));
+	u8 *tik = calloc(addpadding(tiksize, 64),sizeof(u8));
 	fread(tik, 1, tiksize, infile);
 	fclose(infile);
 
@@ -282,14 +313,14 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading metadata.tmd\r\n");
 	}
 	infile = fopen("metadata.tmd", "rb");
-	u8 *tmd = malloc(addpadding(tmdsize, 64));
+	u8 *tmd = calloc(addpadding(tmdsize, 64),sizeof(u8));
 	fread(tmd, 1, tmdsize, infile);
 	fclose(infile);
 
 	if (verbose == 1) {
 		printf("Generating Fooder signature\r\n");
 	}
-	u8 *footer = malloc(0x40);
+	u8 *footer = calloc(0x40,sizeof(u8));
 	memset(footer, 0, 0x40);
 	footer[0] = 0x47;
 	footer[1] = 0x5A;
@@ -317,9 +348,9 @@ void do_pack(const char *titleid, const char *channelname) {
 		closedir(dir);
 	}
 
-	u8_node *nodes = malloc(sizeof(u8_node)* (nodec + 1));
+	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
 
-	u8 *string_table = malloc(nodec * 100 * sizeof(u8)); // Assume max 100 char per filename
+	u8 *string_table = calloc(nodec * 100,sizeof(u8)); // Assume max 100 char per filename
 	memset(string_table, 0, (nodec * 100 * sizeof(u8)));
 	string_table[0] = 0x00;
 	string_table[1] = 0x2e;
@@ -373,7 +404,7 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	
 
-	u8 *data = malloc(sizeof(u8) * doff);
+	u8 *data = calloc(doff, sizeof(u8));
 	u32 curpos = 0;
 
 	if (verbose == 1) {
@@ -675,6 +706,10 @@ void do_pack(const char *titleid, const char *channelname) {
 	free(cfname);
 
 	chdir(workingdirectory);
+
+	truchasign(tmd, W_TMD, tmdsize);
+	truchasign(tik, W_TIK, tiksize);
+
 
 	if (verbose == 1) {
 		printf("Generating WAD Header, and flipping endianness\r\n");
