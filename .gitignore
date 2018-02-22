@@ -274,3 +274,4 @@ wadextract/
 *.o
 Makefile
 config.*
+wad.h

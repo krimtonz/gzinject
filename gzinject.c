@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <getopt.h>
+#include <ftw.h>
 #include "gzinject.h"
 #include "aes.h"
 #include "sha1.h"
@@ -13,12 +14,12 @@
 
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)
-#define getcwd(X,Y) _getcwd(X,Y);
+#define getcwd(X,Y) _getcwd(X,Y)
 #endif
 
 unsigned char key[16];
 u8 region = 0x03;
-int verbose = 0;
+int cleanup = 0, verbose=0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
 	*workingdirectory = NULL;
 
@@ -31,7 +32,8 @@ static struct option cmdoptions[] = {
 { "key",required_argument,0,'k' },
 { "region",required_argument,0,'r' },
 { "verbose",no_argument,&verbose,1 },
-{ "directory",required_argument,0,'d' }
+{ "directory",required_argument,0,'d' },
+{ "cleanup", no_argument,&cleanup,1}
 };
 
 const unsigned char newkey[16] = {
@@ -65,7 +67,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 
@@ -87,7 +89,7 @@ void truchasign(u8 *data, u8 type, size_t len) {
 		}
 		for (i = 0; i < 0xFFFF; i++) {
 			u16 revi = REVERSEENDIAN16(i);
-			memcpy(data + pos,	&revi	, 2);
+			memcpy(data + pos, &revi, 2);
 			sha1 = malloc(sizeof(SHA1_CTX));
 			SHA1Init(sha1);
 			SHA1Update(sha1, data + pos, len - 0x140);
@@ -100,6 +102,40 @@ void truchasign(u8 *data, u8 type, size_t len) {
 	}
 }
 
+static int rmfiledir(const char *path, const struct stat *sbuffer, int type, struct FTW *fbuffer)
+{
+	if (verbose == 1) {
+		printf("Removing file %s\r\n", path);
+	}
+	if ((sbuffer ->st_mode & S_IFMT) == S_IFDIR) {
+		if (rmdir(path) < 0) {
+			return -1;
+		}
+	}
+	else if (remove(path) < 0)
+	{
+		return -1;
+	}
+	return 0;
+}
+
+int cleanup_waddir()
+{
+	DIR *testdir = opendir(directory);
+	if (testdir) {
+		closedir(testdir);
+	}
+	else {
+		return -1;
+	}
+	if (nftw(directory, rmfiledir, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS) < 0)
+	{
+		return -1;
+	}
+	return 0;
+
+}
+
 void do_extract() {
 	struct stat sbuffer;
 	if (stat(wad, &sbuffer) != 0) {
@@ -110,7 +146,7 @@ void do_extract() {
 	if (verbose == 1) {
 		printf("Extracting %s to %s\r\n", wad, directory);
 	}
-	mkdir(directory, 0755);
+	
 	FILE *wadfile = fopen(wad, "rb");
 	fseek(wadfile, 0, SEEK_END);
 	size_t wadsize = ftell(wadfile);
@@ -118,7 +154,20 @@ void do_extract() {
 	u8 *data = (u8*)malloc(wadsize);
 	fread(data, 1, wadsize, wadfile);
 	fclose(wadfile);
-	chdir(directory);
+	if (be32(&data[3]) != 0x20497300){
+		printf("%s does not appear to be a valid WAD, would you like to continue? (y/n) ",wad);
+		char ans;
+		scanf("%c", &ans);
+		while (ans != 'y' && ans != 'n') {
+			printf("\r\n %s does not appear to be a valid WAD, would you like to continue? (y/n) ",wad);
+			scanf("%c", &ans);
+		}
+		printf("\r\n");
+		if (ans == 'n') {
+			free(data);
+			return;
+		}
+	}
 
 	u32 certsize = be32(data + 0x08);
 	u32 tiksize = be32(data + 0x10);
@@ -128,6 +177,29 @@ void do_extract() {
 	u32 tikpos = 0x40 + addpadding(certsize, 64);
 	u32 tmdpos = tikpos + addpadding(tiksize, 64);
 	u32 datapos = tmdpos + addpadding(tmdsize, 64);
+
+	char* titleid = calloc(5, sizeof(u8));
+	memcpy(titleid, &data[tmdpos + 0x190], 4);
+	
+	if (strcmp(titleid, "NACJ") != 0 && strcmp(titleid, "NACE") != 0 && strcmp(titleid, "NGZE") != 0 && strcmp(titleid, "NGZJ")) {
+		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ",wad,titleid);
+		char ans;
+		scanf("%c", &ans);
+		while (ans != 'y' && ans != 'n') {
+			printf("\r\n%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
+			scanf("%c", &ans);
+		}
+		printf("\r\n");
+		if (ans == 'n') {
+			free(data);
+			return;
+		}
+	}
+
+	if (cleanup == 1) cleanup_waddir(directory);
+
+	mkdir(directory, 0755);
+	chdir(directory);
 
 	u16 contentcount = be16(data + tmdpos + 0x1de);
 
@@ -769,6 +841,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	free(contents);
 	free(footer);
 
+	if (cleanup == 1) cleanup_waddir(directory);
+
 }
 
 void genkey() {
@@ -801,6 +875,8 @@ void genkey() {
 }
 
 int main(int argc, char **argv) {
+	setbuf(stdout, NULL);
+
 	int opt;
 
 	char *action = NULL,
@@ -846,7 +922,7 @@ int main(int argc, char **argv) {
 		}
 
 	}
-
+	
 	if (action == NULL) {
 		print_usage();
 		exit(1);
