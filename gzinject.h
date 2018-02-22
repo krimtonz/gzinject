@@ -1,10 +1,9 @@
-#include <stddef.h>
-
 #define REVERSEENDIAN32(X)  (((X) >> 24) & 0xff) | (((X)<<8) & 0xFF0000) | (((X) >> 8) & 0xff00) | (((X)<<24) & 0xff000000)
 #define REVERSEENDIAN16(X) (((X)>>8) & 0xff) | (((X)<<8) & 0xFF00)
 
 #define W_TIK 0x00
 #define W_TMD 0x01
+#define GZINJECT_VERSION "0.1.2"
 
 typedef unsigned char u8;
 typedef unsigned short u16;

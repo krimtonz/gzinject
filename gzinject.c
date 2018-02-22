@@ -28,12 +28,14 @@ static struct option cmdoptions[] = {
 { "wad",required_argument,0,'w' },
 { "channelid",required_argument,0,'i' },
 { "channeltitle",required_argument,0,'t' },
-{ "help",no_argument,0,'?' },
+{ "help",no_argument,0,'h' },
 { "key",required_argument,0,'k' },
 { "region",required_argument,0,'r' },
 { "verbose",no_argument,&verbose,1 },
 { "directory",required_argument,0,'d' },
-{ "cleanup", no_argument,&cleanup,1}
+{ "cleanup", no_argument,&cleanup,1},
+{"version",no_argument,0,'v'},
+{0,0,0,0}
 };
 
 const unsigned char newkey[16] = {
@@ -67,8 +69,14 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
+}
+
+void print_version(const char* prog) {
+	printf("%s Version ",prog);
+	printf(GZINJECT_VERSION);
+	printf("\r\n");
 }
 
 void truchasign(u8 *data, u8 type, size_t len) {
@@ -303,7 +311,6 @@ void do_extract() {
 				u16 name_offset = be16((u8*)&node->name_offset);
 				u16 type = be16((u8*)&node->type);
 				char *name = (char*)&string_table[name_offset];
-
 				if (type == 0x00) {
 					if (verbose == 1) {
 						printf("Extracting and writing content5/%s.\r\n", name);
@@ -886,7 +893,7 @@ int main(int argc, char **argv) {
 	while (1) {
 		int oi = 0;
 
-		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:", cmdoptions, &oi);
+		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:v", cmdoptions, &oi);
 		if (opt == -1) break;
 		switch (opt) {
 		case 'a':
@@ -901,6 +908,7 @@ int main(int argc, char **argv) {
 		case 't':
 			channeltitle = optarg;
 			break;
+		case 'h':
 		case '?':
 			print_usage();
 			exit(0);
@@ -916,6 +924,10 @@ int main(int argc, char **argv) {
 			break;
 		case 'd':
 			directory = optarg;
+			break;
+		case 'v':
+			print_version(argv[0]);
+			exit(0);
 			break;
 		default:
 			break;
