@@ -19,7 +19,9 @@ Usage: gzinject -a,--action=(genkey | extract | pack) [options]
     -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
     -r, --region [0-3]					Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
     -k, --key keyfile					Uses the specified common key file
+	--cleanup						Cleans up the wad directory before extracting or after packing
     -v, --verbose					Prints verbose information
+	-v, --version					Prints version information
     -?, --help						Prints this help message
 ```
 
