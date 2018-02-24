@@ -1,21 +1,24 @@
-CC=gcc
-CFLAGS = -O3 -Wall
-prefix 	= @prefix@
+CC			= @CC@
+CFLAGS		= -O3 -Wall @CFLAGS@
+prefix 		= @prefix@
 exec_prefix = @exec_prefix@
-bindir	= @bindir@
+bindir		= @bindir@
+PROGNAME	= gzinject
+LDFLAGS		= -s @LDFLAGS@
+SRC			= *.c
 
-OBJ = gzinject.o aes.o sha1.o md5.o
+.PHONY		: all install clean distclean
 
-$(ODIR)/%.o: %.c
-	$(CC) -c -o $@ $< $(CFLAGS)
+all			: $(PROGNAME)
 
-gzinject: $(OBJ) 
-	$(CC) -o $@ $^
+clean		:
+	rm -f $(PROGNAME)
 
-.PHONY: clean
+distclean	:
+	rm -f Makefile
 
-clean:
-	rm -f *.o gzinject
+install		:
+	install -p -D --target-directory=$(bindir) $(PROGNAME)
 
-install:
-	install gzinject $(bindir)
+$(PROGNAME) : $(SRC)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
