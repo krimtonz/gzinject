@@ -1,5 +1,5 @@
 CC			= @CC@
-CFLAGS		= -O3 -Wall @CFLAGS@
+CFLAGS		= -Wall -D_XOPEN_SOURCE=500 @CFLAGS@
 prefix 		= @prefix@
 exec_prefix = @exec_prefix@
 bindir		= @bindir@

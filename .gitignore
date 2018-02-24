@@ -275,3 +275,4 @@ wadextract/
 Makefile
 config.*
 wad.h
+gzinject

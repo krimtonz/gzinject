@@ -1,3 +1,8 @@
+#ifndef _GZINJECT_H_
+#define _GZINJECT_H_
+
+#include <stddef.h>
+
 #define REVERSEENDIAN32(X)  (((X) >> 24) & 0xff) | (((X)<<8) & 0xFF0000) | (((X) >> 8) & 0xff00) | (((X)<<24) & 0xff000000)
 #define REVERSEENDIAN16(X) (((X)>>8) & 0xff) | (((X)<<8) & 0xFF00)
 
@@ -32,3 +37,4 @@ u32 be32(const u8 *p);
 u32 getcontentlength(u8 *tmd, unsigned int contentnum);
 u32 addpadding(unsigned int inp, unsigned int padding);
 void truchasign(u8 *data, u8 type, size_t len);
+#endif
