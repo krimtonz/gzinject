@@ -37,4 +37,6 @@ u32 be32(const u8 *p);
 u32 getcontentlength(u8 *tmd, unsigned int contentnum);
 u32 addpadding(unsigned int inp, unsigned int padding);
 void truchasign(u8 *data, u8 type, size_t len);
+void removefile(const char *file);
+void removedir(const char *file);
 #endif

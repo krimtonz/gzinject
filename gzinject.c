@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <getopt.h>
-#include <ftw.h>
 #include "gzinject.h"
 #include "aes.h"
 #include "sha1.h"
@@ -25,17 +24,17 @@ char *wad = NULL, *directory = NULL, *keyfile = NULL,
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
-{ "wad",required_argument,0,'w' },
-{ "channelid",required_argument,0,'i' },
-{ "channeltitle",required_argument,0,'t' },
-{ "help",no_argument,0,'h' },
-{ "key",required_argument,0,'k' },
-{ "region",required_argument,0,'r' },
-{ "verbose",no_argument,&verbose,1 },
-{ "directory",required_argument,0,'d' },
-{ "cleanup", no_argument,&cleanup,1},
-{"version",no_argument,0,'v'},
-{0,0,0,0}
+	{ "wad",required_argument,0,'w' },
+	{ "channelid",required_argument,0,'i' },
+	{ "channeltitle",required_argument,0,'t' },
+	{ "help",no_argument,0,'h' },
+	{ "key",required_argument,0,'k' },
+	{ "region",required_argument,0,'r' },
+	{ "verbose",no_argument,&verbose,1 },
+	{ "directory",required_argument,0,'d' },
+	{ "cleanup", no_argument,&cleanup,1},
+	{"version",no_argument,0,'v'},
+	{0,0,0,0}
 };
 
 const unsigned char newkey[16] = {
@@ -110,37 +109,36 @@ void truchasign(u8 *data, u8 type, size_t len) {
 	}
 }
 
-static int rmfiledir(const char *path, const struct stat *sbuffer, int type, struct FTW *fbuffer)
-{
-	if (verbose == 1) {
-		printf("Removing file %s\r\n", path);
-	}
-	if ((sbuffer ->st_mode & S_IFMT) == S_IFDIR) {
-		if (rmdir(path) < 0) {
-			return -1;
-		}
-	}
-	else if (remove(path) < 0)
-	{
-		return -1;
-	}
-	return 0;
-}
+void removefile(const char* file) {
+    struct stat sbuffer;
+    if (stat(file, &sbuffer) == 0) {
+        if ((sbuffer.st_mode & S_IFMT) == S_IFDIR) {
+            removedir(file);
+        }
+        else if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
+            if (verbose == 1) {
+                printf("Removing %s\r\n", file);
+            }
+            remove(file);
+        }
 
-int cleanup_waddir()
-{
-	DIR *testdir = opendir(directory);
-	if (testdir) {
-		closedir(testdir);
-	}
-	else {
-		return -1;
-	}
-	if (nftw(directory, rmfiledir, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS) < 0)
-	{
-		return -1;
-	}
-	return 0;
+    }
+}
+void removedir(const char *file) {
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir(file)) != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+                continue;
+            char *path = malloc(1000);
+            snprintf(path, 1000, "%s/%s", file, ent->d_name);
+            removefile(path);
+            free(path);
+        }
+        printf("Removing %s\r\n", file);
+        rmdir(file);
+    }
 
 }
 
@@ -204,7 +202,7 @@ void do_extract() {
 		}
 	}
 
-	if (cleanup == 1) cleanup_waddir(directory);
+	if (cleanup == 1) removedir(directory);
 
 	mkdir(directory, 0755);
 	chdir(directory);
@@ -848,7 +846,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	free(contents);
 	free(footer);
 
-	if (cleanup == 1) cleanup_waddir(directory);
+	if (cleanup == 1) removedir(directory);
 
 }
 
