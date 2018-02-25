@@ -1,5 +1,5 @@
 CC			= @CC@
-CFLAGS		= -Wall @CFLAGS@
+CFLAGS		= -Wall -Wno-unused-result @CFLAGS@
 prefix 		= @prefix@
 exec_prefix = @exec_prefix@
 bindir		= @bindir@
