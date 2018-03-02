@@ -18,7 +18,7 @@
 
 unsigned char key[16];
 u8 region = 0x03;
-int cleanup = 0, verbose=0;
+int cleanup = 0, verbose = 0, raphnet = 0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
 	*workingdirectory = NULL;
 
@@ -34,6 +34,7 @@ static struct option cmdoptions[] = {
 	{ "directory",required_argument,0,'d' },
 	{ "cleanup", no_argument,&cleanup,1},
 	{"version",no_argument,0,'v'},
+	{"raphnet",no_argument,&raphnet,1},
 	{0,0,0,0}
 };
 
@@ -68,12 +69,12 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\tMaps L to Z for raphnet adapters\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 
 void print_version(const char* prog) {
-	printf("%s Version ",prog);
+	printf("%s Version ", prog);
 	printf(GZINJECT_VERSION);
 	printf("\r\n");
 }
@@ -110,35 +111,37 @@ void truchasign(u8 *data, u8 type, size_t len) {
 }
 
 void removefile(const char* file) {
-    struct stat sbuffer;
-    if (stat(file, &sbuffer) == 0) {
-        if ((sbuffer.st_mode & S_IFMT) == S_IFDIR) {
-            removedir(file);
-        }
-        else if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-            if (verbose == 1) {
-                printf("Removing %s\r\n", file);
-            }
-            remove(file);
-        }
+	struct stat sbuffer;
+	if (stat(file, &sbuffer) == 0) {
+		if ((sbuffer.st_mode & S_IFMT) == S_IFDIR) {
+			removedir(file);
+		}
+		else if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
+			if (verbose == 1) {
+				printf("Removing %s\r\n", file);
+			}
+			remove(file);
+		}
 
-    }
+	}
 }
 void removedir(const char *file) {
-    DIR *dir;
-    struct dirent *ent;
-    if ((dir = opendir(file)) != NULL) {
-        while ((ent = readdir(dir)) != NULL) {
-            if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
-                continue;
-            char *path = malloc(1000);
-            snprintf(path, 1000, "%s/%s", file, ent->d_name);
-            removefile(path);
-            free(path);
-        }
-        printf("Removing %s\r\n", file);
-        rmdir(file);
-    }
+	DIR *dir;
+	struct dirent *ent;
+	if ((dir = opendir(file)) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
+			if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+				continue;
+			char *path = malloc(1000);
+			snprintf(path, 1000, "%s/%s", file, ent->d_name);
+			removefile(path);
+			free(path);
+		}
+		if (verbose == 1) {
+			printf("Removing %s\r\n", file);
+		}
+		rmdir(file);
+	}
 
 }
 
@@ -152,7 +155,7 @@ void do_extract() {
 	if (verbose == 1) {
 		printf("Extracting %s to %s\r\n", wad, directory);
 	}
-	
+
 	FILE *wadfile = fopen(wad, "rb");
 	fseek(wadfile, 0, SEEK_END);
 	size_t wadsize = ftell(wadfile);
@@ -160,12 +163,12 @@ void do_extract() {
 	u8 *data = (u8*)malloc(wadsize);
 	fread(data, 1, wadsize, wadfile);
 	fclose(wadfile);
-	if (be32(&data[3]) != 0x20497300){
-		printf("%s does not appear to be a valid WAD, would you like to continue? (y/n) ",wad);
+	if (be32(&data[3]) != 0x20497300) {
+		printf("%s does not appear to be a valid WAD, would you like to continue? (y/n) ", wad);
 		char ans;
 		scanf("%c", &ans);
 		while (ans != 'y' && ans != 'n') {
-			printf("\r\n %s does not appear to be a valid WAD, would you like to continue? (y/n) ",wad);
+			printf("\r\n %s does not appear to be a valid WAD, would you like to continue? (y/n) ", wad);
 			scanf("%c", &ans);
 		}
 		printf("\r\n");
@@ -186,9 +189,9 @@ void do_extract() {
 
 	char* titleid = calloc(5, sizeof(u8));
 	memcpy(titleid, &data[tmdpos + 0x190], 4);
-	
+
 	if (strcmp(titleid, "NACJ") != 0 && strcmp(titleid, "NACE") != 0 && strcmp(titleid, "NGZE") != 0 && strcmp(titleid, "NGZJ")) {
-		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ",wad,titleid);
+		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
 		char ans;
 		scanf("%c", &ans);
 		while (ans != 'y' && ans != 'n') {
@@ -374,7 +377,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading cert.cert\r\n");
 	}
 	FILE *infile = fopen("cert.cert", "rb");
-	u8 *cert = calloc(addpadding(certsize, 64),sizeof(u8)	);
+	u8 *cert = calloc(addpadding(certsize, 64), sizeof(u8));
 	fread(cert, 1, certsize, infile);
 	fclose(infile);
 
@@ -382,7 +385,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading ticket.cert\r\n");
 	}
 	infile = fopen("ticket.tik", "rb");
-	u8 *tik = calloc(addpadding(tiksize, 64),sizeof(u8));
+	u8 *tik = calloc(addpadding(tiksize, 64), sizeof(u8));
 	fread(tik, 1, tiksize, infile);
 	fclose(infile);
 
@@ -390,14 +393,14 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading metadata.tmd\r\n");
 	}
 	infile = fopen("metadata.tmd", "rb");
-	u8 *tmd = calloc(addpadding(tmdsize, 64),sizeof(u8));
+	u8 *tmd = calloc(addpadding(tmdsize, 64), sizeof(u8));
 	fread(tmd, 1, tmdsize, infile);
 	fclose(infile);
 
 	if (verbose == 1) {
 		printf("Generating Fooder signature\r\n");
 	}
-	u8 *footer = calloc(0x40,sizeof(u8));
+	u8 *footer = calloc(0x40, sizeof(u8));
 	memset(footer, 0, 0x40);
 	footer[0] = 0x47;
 	footer[1] = 0x5A;
@@ -427,7 +430,7 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
 
-	u8 *string_table = calloc(nodec * 100,sizeof(u8)); // Assume max 100 char per filename
+	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
 	memset(string_table, 0, (nodec * 100 * sizeof(u8)));
 	string_table[0] = 0x00;
 	string_table[1] = 0x2e;
@@ -479,7 +482,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		prevchar = string_table[k];
 	}
 
-	
+
 
 	u8 *data = calloc(doff, sizeof(u8));
 	u32 curpos = 0;
@@ -511,9 +514,9 @@ void do_pack(const char *titleid, const char *channelname) {
 	if (verbose == 1) {
 		printf("Exporting new U8 Archive to content5.app\r\n");
 	}
-	
-	
-	
+
+
+
 	u8_header header;
 	header.tag = 0x2D38AA55; // 0x55AA382D 
 	header.rootnode_offset = 0x20; // 0x00000020
@@ -523,8 +526,8 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	u32 dataoffset = header.data_offset;
 	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
-	
-	
+
+
 	FILE *foutfile = fopen("content5.app", "wb");
 
 	header.header_size = REVERSEENDIAN32(header.header_size);
@@ -548,7 +551,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	}
 	fwrite(nodes, 1, sizeof(u8_node) * (nodec + 1), foutfile);
 	free(nodes);
-	
+
 	fwrite(string_table, 1, k, foutfile);
 	free(string_table);
 
@@ -743,11 +746,21 @@ void do_pack(const char *titleid, const char *channelname) {
 			// DRIGHT
 			contents[contentpos + 0x16BAFC] = 0x01;
 			contents[contentpos + 0x16BAFD] = 0x00;
-			if (verbose == 1) {
-				printf("\tController C-Stick-Down to L\r\n");
+			
+
+			if (raphnet == 1) {
+				if (verbose == 1) {
+					printf("\tController Z to L For Raphnet\r\n");
+				}
+				contents[contentpos + 0x16BAD9] = 0x20;
 			}
-			// CStick Down -> L
-			contents[contentpos + 0x16BB05] = 0x20;
+			else {
+				if (verbose == 1) {
+					printf("\tController C-Stick-Down to L\r\n");
+				}
+				// CStick Down -> L
+				contents[contentpos + 0x16BB05] = 0x20;
+			}
 		}
 
 		iv[0] = tmd[0x1e8 + (0x24 * i)];
@@ -876,7 +889,7 @@ void genkey() {
 	fwrite(&outkey, 1, 16, keyf);
 	fclose(keyf);
 
-	printf("%s successfully generated!\r\n",keyfile);
+	printf("%s successfully generated!\r\n", keyfile);
 }
 
 int main(int argc, char **argv) {
@@ -932,7 +945,7 @@ int main(int argc, char **argv) {
 		}
 
 	}
-	
+
 	if (action == NULL) {
 		print_usage();
 		exit(1);
