@@ -8,7 +8,7 @@
 
 #define W_TIK 0x00
 #define W_TMD 0x01
-#define GZINJECT_VERSION "0.1.2"
+#define GZINJECT_VERSION "0.1.2-2"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -28,7 +28,7 @@ typedef struct
 	u32 rootnode_offset;
 	u32 header_size;
 	u32 data_offset;
-	u8 zeroes[16];
+	u8 padding[16];
 } u8_header;
 
 u16 be16(const u8 *p);

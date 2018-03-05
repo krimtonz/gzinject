@@ -4,7 +4,6 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
-#include <time.h>
 #include <getopt.h>
 #include "gzinject.h"
 #include "aes.h"
@@ -401,11 +400,8 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Generating Fooder signature\r\n");
 	}
 	u8 *footer = calloc(0x40, sizeof(u8));
-	memset(footer, 0, 0x40);
 	footer[0] = 0x47;
 	footer[1] = 0x5A;
-	time_t curtime = time(NULL);
-	memcpy(footer + 2, &curtime, sizeof(time_t));
 	u32 footersize = 0x40;
 
 	// Build Content5 into a .app file first
@@ -522,7 +518,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	header.rootnode_offset = 0x20; // 0x00000020
 	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
 	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
-	memset(header.zeroes, 0, 16);
+	memset(header.padding, 0, 16);
 
 	u32 dataoffset = header.data_offset;
 	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
@@ -809,8 +805,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	char wadheader[8] = {
 		0x00, 0x00, 0x00, 0x20, 0x49, 0x73, 0x00, 0x00
 	};
-	char zeroes[4];
-	memset(&zeroes, 0, 4);
+	char hpadding[4];
+	memset(&hpadding, 0, 4);
 
 	u32 certsizer = REVERSEENDIAN32(certsize);
 	u32 tiksizer = REVERSEENDIAN32(tiksize);
@@ -820,7 +816,7 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	fwrite(&wadheader, 1, 8, outwadfile);
 	fwrite(&certsizer, 1, 4, outwadfile);
-	fwrite(&zeroes, 1, 4, outwadfile);
+	fwrite(&hpadding, 1, 4, outwadfile);
 	fwrite(&tiksizer, 1, 4, outwadfile);
 	fwrite(&tmdsizer, 1, 4, outwadfile);
 	fwrite(&datasizer, 1, 4, outwadfile);
