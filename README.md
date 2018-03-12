@@ -18,7 +18,7 @@ Usage: gzinject -a,--action=(genkey | extract | pack) [options]
     -i, --channelid channelid				Changes the channel id during packing (4 characters)
     -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
     -r, --region [0-3]					Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
-	--raphnet							Maps Z To L instead of c-stick down, for N64->GC Raphnet Adapters
+	--raphnet					Maps Z To L instead of c-stick down, for N64->GC Raphnet Adapters
     -k, --key keyfile					Uses the specified common key file
 	--cleanup					Cleans up the wad directory before extracting or after packing
     --verbose						Prints verbose information
