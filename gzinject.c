@@ -101,10 +101,10 @@ void truchasign(u8 *data, u8 type, size_t len) {
 			SHA1Init(sha1);
 			SHA1Update(sha1, data + pos, len - 0x140);
 			SHA1Final(digest, sha1);
+			free(sha1);
 			if (digest[0] == 0x00) {
 				break;
 			}
-			free(sha1);
 		}
 	}
 }
