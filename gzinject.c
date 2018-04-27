@@ -17,7 +17,7 @@
 
 unsigned char key[16];
 u8 region = 0x03;
-int cleanup = 0, verbose = 0, raphnet = 0;
+int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
 	*workingdirectory = NULL;
 
@@ -34,6 +34,7 @@ static struct option cmdoptions[] = {
 	{ "cleanup", no_argument,&cleanup,1},
 	{"version",no_argument,0,'v'},
 	{"raphnet",no_argument,&raphnet,1},
+	{"disable-controller-remappings",no_argument,&disablemappings,1},
 	{0,0,0,0}
 };
 
@@ -68,7 +69,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\tMaps L to Z for raphnet adapters\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 
@@ -716,46 +717,48 @@ void do_pack(const char *titleid, const char *channelname) {
 			contents[contentpos + 0x2EB1] = 0x00;
 			contents[contentpos + 0x2EB3] = 0x00;
 
-			if (verbose == 1) {
-				printf("\tController D-Pad Up\r\n");
-			}
-			// Mapping fix
-			// DUP
-			contents[contentpos + 0x16BAF0] = 0x08;
-			contents[contentpos + 0x16BAF1] = 0x00;
-
-			if (verbose == 1) {
-				printf("\tController D-Pad Down\r\n");
-			}
-			// DDown
-			contents[contentpos + 0x16BAF4] = 0x04;
-			contents[contentpos + 0x16BAF5] = 0x00;
-			if (verbose == 1) {
-				printf("\tController D-Pad Left\r\n");
-			}
-			// DLEFT
-			contents[contentpos + 0x16BAF8] = 0x02;
-			contents[contentpos + 0x16BAF9] = 0x00;
-			if (verbose == 1) {
-				printf("\tController D-Pad Right\r\n");
-			}
-			// DRIGHT
-			contents[contentpos + 0x16BAFC] = 0x01;
-			contents[contentpos + 0x16BAFD] = 0x00;
-			
-
-			if (raphnet == 1) {
+			if (disablemappings == 0) {
 				if (verbose == 1) {
-					printf("\tController Z to L For Raphnet\r\n");
+					printf("\tController D-Pad Up\r\n");
 				}
-				contents[contentpos + 0x16BAD9] = 0x20;
-			}
-			else {
+				// Mapping fix
+				// DUP
+				contents[contentpos + 0x16BAF0] = 0x08;
+				contents[contentpos + 0x16BAF1] = 0x00;
+
 				if (verbose == 1) {
-					printf("\tController C-Stick-Down to L\r\n");
+					printf("\tController D-Pad Down\r\n");
 				}
-				// CStick Down -> L
-				contents[contentpos + 0x16BB05] = 0x20;
+				// DDown
+				contents[contentpos + 0x16BAF4] = 0x04;
+				contents[contentpos + 0x16BAF5] = 0x00;
+				if (verbose == 1) {
+					printf("\tController D-Pad Left\r\n");
+				}
+				// DLEFT
+				contents[contentpos + 0x16BAF8] = 0x02;
+				contents[contentpos + 0x16BAF9] = 0x00;
+				if (verbose == 1) {
+					printf("\tController D-Pad Right\r\n");
+				}
+				// DRIGHT
+				contents[contentpos + 0x16BAFC] = 0x01;
+				contents[contentpos + 0x16BAFD] = 0x00;
+
+
+				if (raphnet == 1) {
+					if (verbose == 1) {
+						printf("\tController Z to L For Raphnet\r\n");
+					}
+					contents[contentpos + 0x16BAD9] = 0x20;
+				}
+				else {
+					if (verbose == 1) {
+						printf("\tController C-Stick-Down to L\r\n");
+					}
+					// CStick Down -> L
+					contents[contentpos + 0x16BB05] = 0x20;
+				}
 			}
 		}
 
