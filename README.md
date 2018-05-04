@@ -4,6 +4,12 @@ gzinject is used to extract the contents of a wad and pack it back into a wad wi
 While this will work for *most* WADs, it is designed to work primarily with the Ocarina of Time wad in order to inject
 gz (the practice rom). 
 
+## Executable 
+
+To build your own, run ./configure, then make, and make install.
+
+Prebuilt Windows executable is contained under releases (https://github.com/krimtonz/gzinject/releases/latest)
+
 ## Usage 
 
 ```
