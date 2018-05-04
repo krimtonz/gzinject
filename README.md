@@ -13,8 +13,10 @@ Usage: gzinject -a,--action=(genkey | extract | pack) [options]
       genkey: generates a common key
       extract: extracts contents of wadfile specified by --wad to --directory
       pack: packs contents --directory  into wad specified by --wad
+      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad
     -w, --wad wadfile					Defines the wadfile to use Input wad for extracting, output wad for packing
     -d, --directory directory				Defines the output directory for extract operations, or the input directory for pack operations
+	-m, --rom rom						Defines the rom to inject using -a inject 
     -i, --channelid channelid				Changes the channel id during packing (4 characters)
     -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
     -r, --region [0-3]					Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE

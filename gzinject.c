@@ -19,7 +19,7 @@ unsigned char key[16];
 u8 region = 0x03;
 int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
-	*workingdirectory = NULL;
+	*workingdirectory = NULL, *rom = NULL;
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -35,12 +35,175 @@ static struct option cmdoptions[] = {
 	{"version",no_argument,0,'v'},
 	{"raphnet",no_argument,&raphnet,1},
 	{"disable-controller-remappings",no_argument,&disablemappings,1},
+	{"rom",required_argument,0,'m'},
 	{0,0,0,0}
 };
 
 const unsigned char newkey[16] = {
 	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
 };
+
+
+
+int main(int argc, char **argv) {
+	setbuf(stdout, NULL);
+
+	int opt;
+
+	char *action = NULL,
+		*channelid = NULL,
+		*channeltitle = NULL;
+
+	while (1) {
+		int oi = 0;
+
+		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:v", cmdoptions, &oi);
+		if (opt == -1) break;
+		switch (opt) {
+		case 'a':
+			action = optarg;
+			break;
+		case 'w':
+			wad = optarg;
+			break;
+		case 'i':
+			channelid = optarg;
+			break;
+		case 't':
+			channeltitle = optarg;
+			break;
+		case 'h':
+		case '?':
+			print_usage();
+			exit(0);
+			break;
+		case 'k':
+			keyfile = optarg;
+			break;
+		case 'r':
+			if (optarg[0] == '0') region = 0;
+			else if (optarg[0] == '1') region = 1;
+			else if (optarg[0] == '2') region = 2;
+			else region = 3;
+			break;
+		case 'd':
+			directory = optarg;
+			break;
+		case 'v':
+			print_version(argv[0]);
+			exit(0);
+			break;
+		case 'm':
+			rom = optarg;
+			break;	
+		default:
+			break;
+		}
+
+	}
+
+	if (action == NULL) {
+		print_usage();
+		exit(1);
+	}
+
+	if (strcmp(action, "genkey") == 0) {
+
+		genkey();
+		return 0;
+	}
+
+	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action,"inject")!=0) {
+
+		print_usage();
+		exit(0);
+	}
+
+
+	if (wad == NULL) {
+		print_usage();
+		exit(1);
+	}
+
+	if (directory == NULL) directory = "wadextract";
+
+	struct stat sbuffer;
+	if (keyfile == NULL) {
+		if (stat("key.bin", &sbuffer) == 0) {
+			keyfile = "key.bin";
+		}
+		else if (stat("common-key.bin", &sbuffer) == 0) {
+			keyfile = "common-key.bin";
+		}
+		else {
+			printf("Cannot find key.bin or common-key.bin.\r\n");
+			exit(1);
+		}
+	}
+	else {
+		if (stat(keyfile, &sbuffer) != 0) {
+			printf("Cannot find keyfile specified.\r\n");
+			exit(1);
+		}
+	}
+
+	FILE *fkeyfile = fopen(keyfile, "rb");
+	fread(&key, 1, 16, fkeyfile);
+	fclose(fkeyfile);
+
+	workingdirectory = malloc(200);
+	workingdirectory = getcwd(workingdirectory, 200);
+
+	if (strcmp(action, "extract") == 0) {
+		do_extract();
+	}
+	else if (strcmp(action, "pack") == 0) {
+		do_pack(channelid, channeltitle);
+	}
+	else if (strcmp(action, "inject") == 0) {
+		do_extract();
+
+		if (verbose == 1) {
+			printf("Copying %s to %s/content5/rom\r\n", rom, directory);
+		}
+		FILE *from = fopen(rom, "rb");
+		fseek(from, 0, SEEK_END);
+		size_t fromlen = ftell(from);
+		fseek(from, 0, SEEK_SET);
+		u8 *inrom = malloc(fromlen);
+		fread(inrom, 1, fromlen, from);
+		fclose(from);
+
+		char *orom = malloc(200);
+		snprintf(orom, 200, "%s/content5/rom", directory);
+		from = fopen(orom, "wb");
+		fwrite(inrom, 1, fromlen, from);
+		fclose(from);
+		free(inrom);
+		free(orom);
+		
+
+		char *wadname = removeext(wad),
+			*outname = malloc(strlen(wadname) + 12);
+		
+		sprintf(outname, "%s-inject.wad", wadname);
+		free(wadname);
+		wad = outname;
+
+		char *test = malloc(200);
+		getcwd(test, 200);
+		printf("%s\r\n", test);
+		free(test);
+
+		do_pack(channelid, channeltitle);
+		free(outname);
+	}
+
+	free(workingdirectory);
+
+
+	return 0;
+}
 
 u32 addpadding(unsigned int inp, unsigned int padding) {
 	int ret = inp;
@@ -69,7 +232,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 
@@ -125,6 +288,7 @@ void removefile(const char* file) {
 
 	}
 }
+
 void removedir(const char *file) {
 	DIR *dir;
 	struct dirent *ent;
@@ -336,6 +500,7 @@ void do_extract() {
 		fclose(outfile);
 		free(contentname);
 	}
+	chdir("..");
 	free(data);
 
 }
@@ -347,7 +512,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		closedir(testdir);
 	}
 	else {
-		printf("%s doesn't exit, or is not a directory!\r\n", directory);
+		printf("%s doesn't exist, or is not a directory!\r\n", directory);
 		exit(1);
 	}
 
@@ -891,121 +1056,16 @@ void genkey() {
 	printf("%s successfully generated!\r\n", keyfile);
 }
 
-int main(int argc, char **argv) {
-	setbuf(stdout, NULL);
-
-	int opt;
-
-	char *action = NULL,
-		*channelid = NULL,
-		*channeltitle = NULL;
-
-	while (1) {
-		int oi = 0;
-
-		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:v", cmdoptions, &oi);
-		if (opt == -1) break;
-		switch (opt) {
-		case 'a':
-			action = optarg;
-			break;
-		case 'w':
-			wad = optarg;
-			break;
-		case 'i':
-			channelid = optarg;
-			break;
-		case 't':
-			channeltitle = optarg;
-			break;
-		case 'h':
-		case '?':
-			print_usage();
-			exit(0);
-			break;
-		case 'k':
-			keyfile = optarg;
-			break;
-		case 'r':
-			if (optarg[0] == '0') region = 0;
-			else if (optarg[0] == '1') region = 1;
-			else if (optarg[0] == '2') region = 2;
-			else region = 3;
-			break;
-		case 'd':
-			directory = optarg;
-			break;
-		case 'v':
-			print_version(argv[0]);
-			exit(0);
-			break;
-		default:
-			break;
-		}
-
-	}
-
-	if (action == NULL) {
-		print_usage();
-		exit(1);
-	}
-
-	if (strcmp(action, "genkey") == 0) {
-
-		genkey();
-		return 0;
-	}
-
-	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0) {
-
-		print_usage();
-		exit(0);
-	}
-
-
-	if (wad == NULL) {
-		print_usage();
-		exit(1);
-	}
-
-	if (directory == NULL) directory = "wadextract";
-
-	struct stat sbuffer;
-	if (keyfile == NULL) {
-		if (stat("key.bin", &sbuffer) == 0) {
-			keyfile = "key.bin";
-		}
-		else if (stat("common-key.bin", &sbuffer) == 0) {
-			keyfile = "common-key.bin";
-		}
-		else {
-			printf("Cannot find key.bin or common-key.bin.\r\n");
-			exit(1);
-		}
-	}
-	else {
-		if (stat(keyfile, &sbuffer) != 0) {
-			printf("Cannot find keyfile specified.\r\n");
-			exit(1);
-		}
-	}
-
-	FILE *fkeyfile = fopen(keyfile, "rb");
-	fread(&key, 1, 16, fkeyfile);
-	fclose(fkeyfile);
-
-	workingdirectory = malloc(200);
-	workingdirectory = getcwd(workingdirectory, 200);
-
-	if (strcmp(action, "extract") == 0) {
-		do_extract();
-	}
-	else if (strcmp(action, "pack") == 0) {
-		do_pack(channelid, channeltitle);
-	}
-
-	free(workingdirectory);
-
-
-	return 0;
+char *removeext(char* mystr) {
+	char *retstr;
+	char *lastdot;
+	if (mystr == NULL)
+		return NULL;
+	if ((retstr = malloc(strlen(mystr) + 1)) == NULL)
+		return NULL;
+	strcpy(retstr, mystr);
+	lastdot = strrchr(retstr, '.');
+	if (lastdot != NULL)
+		*lastdot = '\0';
+	return retstr;
 }
