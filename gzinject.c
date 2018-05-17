@@ -19,7 +19,7 @@ unsigned char key[16];
 u8 region = 0x03;
 int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
-	*workingdirectory = NULL, *rom = NULL;
+	*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -36,6 +36,7 @@ static struct option cmdoptions[] = {
 	{"raphnet",no_argument,&raphnet,1},
 	{"disable-controller-remappings",no_argument,&disablemappings,1},
 	{"rom",required_argument,0,'m'},
+	{"outputwad",required_argument,0,'o'},
 	{0,0,0,0}
 };
 
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
 	while (1) {
 		int oi = 0;
 
-		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:v", cmdoptions, &oi);
+		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:vm:o:", cmdoptions, &oi);
 		if (opt == -1) break;
 		switch (opt) {
 		case 'a':
@@ -96,6 +97,9 @@ int main(int argc, char **argv) {
 		case 'm':
 			rom = optarg;
 			break;	
+		case 'o':
+			outwad = optarg;
+			break;
 		default:
 			break;
 		}
@@ -161,6 +165,12 @@ int main(int argc, char **argv) {
 		do_pack(channelid, channeltitle);
 	}
 	else if (strcmp(action, "inject") == 0) {
+		if (rom == NULL) {
+			printf("-a inject specified, but no rom to inject!\n");
+			free(workingdirectory);
+			exit(1);
+
+		}
 		do_extract();
 
 		if (verbose == 1) {
@@ -188,13 +198,13 @@ int main(int argc, char **argv) {
 		
 		sprintf(outname, "%s-inject.wad", wadname);
 		free(wadname);
-		wad = outname;
-
-		char *test = malloc(200);
-		getcwd(test, 200);
-		printf("%s\r\n", test);
-		free(test);
-
+		if (outwad == NULL) {
+			wad = outname;
+		}
+		else {
+			wad = outwad;
+		}
+		
 		do_pack(channelid, channeltitle);
 		free(outname);
 	}
@@ -232,7 +242,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -o, --outputwad wad\t\t\t\tDefines the filename to output to when using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 

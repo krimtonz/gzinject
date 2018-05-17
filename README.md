@@ -23,6 +23,7 @@ Usage: gzinject -a,--action=(genkey | extract | pack) [options]
     -w, --wad wadfile					Defines the wadfile to use Input wad for extracting, output wad for packing
     -d, --directory directory				Defines the output directory for extract operations, or the input directory for pack operations
 	-m, --rom rom						Defines the rom to inject using -a inject 
+	-o, --outputwad wad					Defines the filename to output to when using -a inject
     -i, --channelid channelid				Changes the channel id during packing (4 characters)
     -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
     -r, --region [0-3]					Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE

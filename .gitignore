@@ -276,3 +276,4 @@ Makefile
 config.*
 wad.h
 gzinject
+*.zip
