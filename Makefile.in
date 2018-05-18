@@ -5,7 +5,8 @@ exec_prefix = @exec_prefix@
 bindir		= @bindir@
 PROGNAME	= gzinject
 LDFLAGS		= -s @LDFLAGS@
-SRC			= *.c
+SRC			= gzinject.c
+LIBS		= -lcrypto -lgdi32
 
 .PHONY		: all install clean distclean
 
@@ -21,4 +22,4 @@ install		:
 	install -p -D --target-directory=$(bindir) $(PROGNAME)
 
 $(PROGNAME) : $(SRC)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@

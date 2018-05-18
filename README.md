@@ -6,7 +6,7 @@ gz (the practice rom).
 
 ## Executable 
 
-To build your own, run ./configure, then make, and make install.
+To build your own, run ./configure, then make, and make install. See BUILDING for more instructions
 
 Prebuilt Windows executable is contained under releases (https://github.com/krimtonz/gzinject/releases/latest)
 

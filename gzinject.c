@@ -6,9 +6,15 @@
 #include <unistd.h>
 #include <getopt.h>
 #include "gzinject.h"
+#ifdef _USE_LIBCRYPTO
+#include <openssl/evp.h>
+#include <openssl/md5.h>
+#include <openssl/sha.h>
+#else
 #include "aes.h"
 #include "sha1.h"
 #include "md5.h"
+#endif
 
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)
@@ -40,11 +46,73 @@ static struct option cmdoptions[] = {
 	{0,0,0,0}
 };
 
-const unsigned char newkey[16] = {
+unsigned char newkey[16] = {
 	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
 };
 
+#ifdef _USE_LIBCRYPTO
+inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+	u8 *encrypted = malloc(size * 2);
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	int len;
+	EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
+	EVP_EncryptUpdate(ctx, encrypted, &len, input, size);
+	EVP_EncryptFinal_ex(ctx, encrypted + len, &len);
+	EVP_CIPHER_CTX_free(ctx);
+	memcpy(input, encrypted, size);
+	free(encrypted);
+}
 
+inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+	u8 *decrypted = malloc(size);
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	int len;
+	EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
+	EVP_DecryptUpdate(ctx, decrypted, &len, input, size);
+	EVP_DecryptFinal_ex(ctx, decrypted + len, &len);
+	EVP_CIPHER_CTX_free(ctx);
+	memcpy(input, decrypted, size);
+	free(decrypted);
+}
+
+inline void do_sha1(u8 *input, u8 *output, size_t size) {
+	SHA1(input, size, output);
+}
+
+inline void do_md5(u8 *input, u8 *output, size_t size) {
+	MD5(input, size, output);
+}
+#else
+
+inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
+	AES_init_ctx_iv(aes, key, iv);
+	AES_CBC_encrypt_buffer(aes, input, size);
+	free(aes);
+}
+
+inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
+	AES_init_ctx_iv(aes, key, iv);
+	AES_CBC_decrypt_buffer(aes, input, size);
+	free(aes);
+}
+
+inline void do_sha1(u8 *input, u8 *output, size_t size) {
+	SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
+	SHA1Init(sha1);
+	SHA1Update(sha1, input, size);
+	SHA1Final(output, sha1);
+	free(sha1);
+}
+
+inline void do_md5(u8 *input, u8 *output, size_t size) {
+	MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
+	MD5_Init(md5);
+	MD5_Update(md5, input, size);
+	MD5_Final(output, md5);
+}
+#endif
 
 int main(int argc, char **argv) {
 	setbuf(stdout, NULL);
@@ -257,12 +325,10 @@ void truchasign(u8 *data, u8 type, size_t len) {
 	if (type == W_TMD) {
 		pos = 0x1d4;
 	}
+
 	u8 digest[20];
-	SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
-	SHA1Init(sha1);
-	SHA1Update(sha1, data + pos, len - 0x140);
-	SHA1Final(digest, sha1);
-	free(sha1);
+	do_sha1(data + pos, digest, len - 0x140);
+
 	u16 i;
 	if (digest[0] != 0x00) {
 		for (i = 4; i < 260; i++) {
@@ -271,11 +337,9 @@ void truchasign(u8 *data, u8 type, size_t len) {
 		for (i = 0; i < 0xFFFF; i++) {
 			u16 revi = REVERSEENDIAN16(i);
 			memcpy(data + pos, &revi, 2);
-			sha1 = malloc(sizeof(SHA1_CTX));
-			SHA1Init(sha1);
-			SHA1Update(sha1, data + pos, len - 0x140);
-			SHA1Final(digest, sha1);
-			free(sha1);
+
+			do_sha1(data + pos, digest, len - 0x140);
+
 			if (digest[0] == 0x00) {
 				break;
 			}
@@ -417,11 +481,8 @@ void do_extract() {
 		iv[i] = data[tikpos + 0x1dc + i];
 		iv[i + 8] = 0x00;
 	}
-
-	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
-	AES_init_ctx_iv(aes, key, iv);
-	AES_CBC_decrypt_buffer(aes, encryptedkey, 16);
-	free(aes);
+;
+	do_decrypt(encryptedkey, 16, key, iv);
 
 	for (j = 2; j < 16; j++) iv[j] = 0x00;
 
@@ -434,18 +495,13 @@ void do_extract() {
 		iv[0] = data[tmdpos + 0x1e8 + (0x24 * i)];
 		iv[1] = data[tmdpos + 0x1e9 + (0x24 * i)];
 
-		aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
-		AES_init_ctx_iv(aes, encryptedkey, iv);
+		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
 
 		if (verbose == 1) {
 			printf("Decrypting contents %d.\r\n", i);
 		}
 
-		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
-		AES_CBC_decrypt_buffer(aes, data + contentpos, size);
-
-
-		free(aes);
+		do_decrypt(data + contentpos, size, encryptedkey, iv);
 
 		// Main rom content file
 		if (i == 5) {
@@ -788,10 +844,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		iv[i + 8] = 0x00;
 	}
 
-	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
-	AES_init_ctx_iv(aes, key, iv);
-	AES_CBC_decrypt_buffer(aes, newenc, 16);
-	free(aes);
+	do_decrypt(newenc, 16, key, iv);
 
 	for (j = 2; j < 15; j++) {
 		iv[j] = 0x00;
@@ -870,15 +923,13 @@ void do_pack(const char *titleid, const char *channelname) {
 
 			memset(&contents[contentpos + 0x630], 0x00, 0x10);
 
-			MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
+			
 			u8 md5digest[16];
-			MD5_Init(md5);
-			MD5_Update(md5, contents + contentpos + 64, 1536);
-			MD5_Final(md5digest, md5);
+			do_md5(contents + contentpos + 64, md5digest, 1536);
+
 			for (j = 0; j < 16; j++) {
 				contents[contentpos + 0x630 + j] = md5digest[j];
 			}
-			free(md5);
 		}
 
 		if (i == 1) {
@@ -944,27 +995,17 @@ void do_pack(const char *titleid, const char *channelname) {
 		if (verbose == 1) {
 			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
 		}
-		// Generate a SHA signature incase any files are changes 1 and 5 will most likely be the only one changed. 
+		
 		u8 digest[20];
-		SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
-		SHA1Init(sha1);
-		SHA1Update(sha1, contents + contentpos, getcontentlength(tmd, i));
-		SHA1Final(digest, sha1);
-
+		do_sha1(contents + contentpos, digest, getcontentlength(tmd, i));
 
 		memcpy(tmd + 0x1f4 + (36 * i), &digest, 20);
-		free(sha1);
 
 		if (verbose == 1) {
 			printf("Encrypting content %d\r\n", i);
 		}
-		aes = malloc(sizeof(struct AES_ctx));
-		AES_init_ctx_iv(aes, newenc, iv);
-
-
-
-		AES_CBC_encrypt_buffer(aes, contents + contentpos, size);
-		free(aes);
+		
+		do_encrypt(contents + contentpos, size, newenc, iv);
 
 	}
 	free(cfname);
@@ -1052,12 +1093,10 @@ void genkey() {
 	int i;
 	for (i = 3; i < 16; i++) iv[i] = 0x00;
 
-	struct AES_ctx *aes = malloc(sizeof(struct AES_ctx));
-	AES_init_ctx_iv(aes, newkey, iv);
-	AES_CBC_decrypt_buffer(aes, outkey, 16);
+	do_decrypt(outkey, 16, newkey, iv);
 
 	free(line);
-	free(aes);
+	
 	if (keyfile == NULL)  keyfile = "common-key.bin";
 	FILE *keyf = fopen(keyfile, "wb");
 	fwrite(&outkey, 1, 16, keyf);
