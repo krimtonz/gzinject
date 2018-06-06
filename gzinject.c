@@ -327,7 +327,7 @@ void truchasign(u8 *data, u8 type, size_t len) {
 	}
 
 	u8 digest[20];
-	do_sha1(data + pos, digest, len - 0x140);
+	do_sha1(data + pos + 0x140, digest, len - 0x140);
 
 	u16 i;
 	if (digest[0] != 0x00) {
@@ -338,7 +338,7 @@ void truchasign(u8 *data, u8 type, size_t len) {
 			u16 revi = REVERSEENDIAN16(i);
 			memcpy(data + pos, &revi, 2);
 
-			do_sha1(data + pos, digest, len - 0x140);
+			do_sha1(data + pos + 0x140, digest, len - 0x140);
 
 			if (digest[0] == 0x00) {
 				break;
