@@ -8,7 +8,7 @@
 
 #define W_TIK 0x00
 #define W_TMD 0x01
-#define GZINJECT_VERSION "0.2.1-1"
+#define GZINJECT_VERSION "0.2.1-2"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
