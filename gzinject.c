@@ -23,9 +23,9 @@
 
 unsigned char key[16];
 u8 region = 0x03;
-int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0;
+int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0, writefiles = 1;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
-	*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
+*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
 			break;
 		case 'm':
 			rom = optarg;
-			break;	
+			break;
 		case 'o':
 			outwad = optarg;
 			break;
@@ -185,7 +185,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action,"inject")!=0) {
+	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action, "inject") != 0) {
 
 		print_usage();
 		exit(0);
@@ -226,8 +226,32 @@ int main(int argc, char **argv) {
 	workingdirectory = malloc(200);
 	workingdirectory = getcwd(workingdirectory, 200);
 
+	u8 *data;
+	wad_t *waddata;
+
+	if (strcmp(action, "extract") == 0 || strcmp(action, "inject") == 0) {
+		waddata = malloc(sizeof(wad_t));
+		struct stat sbuffer;
+		if (stat(wad, &sbuffer) != 0) {
+			printf("Could not open %s\r\n", wad);
+			exit(1);
+		}
+
+		if (verbose == 1) {
+			printf("Extracting %s to %s\r\n", wad, directory);
+		}
+
+		FILE *wadfile = fopen(wad, "rb");
+		fseek(wadfile, 0, SEEK_END);
+		size_t wadsize = ftell(wadfile);
+		fseek(wadfile, 0, SEEK_SET);
+		data = malloc(wadsize);
+		fread(data, 1, wadsize, wadfile);
+		fclose(wadfile);
+	}
+
 	if (strcmp(action, "extract") == 0) {
-		do_extract();
+		do_extract(data, waddata);
 	}
 	else if (strcmp(action, "pack") == 0) {
 		do_pack(channelid, channeltitle);
@@ -239,7 +263,9 @@ int main(int argc, char **argv) {
 			exit(1);
 
 		}
-		do_extract();
+		do_extract(data, waddata);
+		
+		
 
 		if (verbose == 1) {
 			printf("Copying %s to %s/content5/rom\r\n", rom, directory);
@@ -252,29 +278,25 @@ int main(int argc, char **argv) {
 		fread(inrom, 1, fromlen, from);
 		fclose(from);
 
-		char *orom = malloc(200);
-		snprintf(orom, 200, "%s/content5/rom", directory);
-		from = fopen(orom, "wb");
-		fwrite(inrom, 1, fromlen, from);
-		fclose(from);
-		free(inrom);
-		free(orom);
-		
+		replace_rom(data + getcontentpos(data, waddata, 5), inrom, fromlen);
 
-		char *wadname = removeext(wad),
-			*outname = malloc(strlen(wadname) + 12);
-		
-		sprintf(outname, "%s-inject.wad", wadname);
-		free(wadname);
+		char *outname = NULL;
+
 		if (outwad == NULL) {
+			char *wadname = removeext(wad);
+			outname = malloc(strlen(wadname) + 12);
+
+			sprintf(outname, "%s-inject.wad", wadname);
+			free(wadname);
+
 			wad = outname;
 		}
 		else {
 			wad = outwad;
 		}
-		
+
 		do_pack(channelid, channeltitle);
-		free(outname);
+		if(outname!=NULL) free(outname);
 	}
 
 	free(workingdirectory);
@@ -298,6 +320,17 @@ u32 getcontentlength(u8 *tmd, unsigned int contentnum) {
 		tmd[off + 6] << 8 |
 		tmd[off + 7];
 }
+
+u32 getcontentpos(u8 *data, wad_t *info, unsigned int contentnum) {
+	u32 contentpos = info->datapos;
+	int j;
+	for (j = 0; j < contentnum; j++) {
+		contentpos = contentpos + addpadding(getcontentlength(data + info->tmdpos, j), 64);
+	}
+	return contentpos;
+}
+
+
 
 u16 be16(const u8 *p)
 {
@@ -383,24 +416,7 @@ void removedir(const char *file) {
 
 }
 
-void do_extract() {
-	struct stat sbuffer;
-	if (stat(wad, &sbuffer) != 0) {
-		printf("Could not open %s\r\n", wad);
-		exit(1);
-	}
-
-	if (verbose == 1) {
-		printf("Extracting %s to %s\r\n", wad, directory);
-	}
-
-	FILE *wadfile = fopen(wad, "rb");
-	fseek(wadfile, 0, SEEK_END);
-	size_t wadsize = ftell(wadfile);
-	fseek(wadfile, 0, SEEK_SET);
-	u8 *data = (u8*)malloc(wadsize);
-	fread(data, 1, wadsize, wadfile);
-	fclose(wadfile);
+void do_extract(u8 *data, wad_t *wadd) {
 	if (be32(&data[3]) != 0x20497300) {
 		printf("%s does not appear to be a valid WAD, would you like to continue? (y/n) ", wad);
 		char ans;
@@ -416,24 +432,23 @@ void do_extract() {
 		}
 	}
 
-	u32 certsize = be32(data + 0x08);
-	u32 tiksize = be32(data + 0x10);
-	u32 tmdsize = be32(data + 0x14);
+	wadd->certsize = be32(data + 0x08);
+	wadd->tiksize = be32(data + 0x10);
+	wadd->tmdsize = be32(data + 0x14);
 
-	u32 certpos = 0x40;
-	u32 tikpos = 0x40 + addpadding(certsize, 64);
-	u32 tmdpos = tikpos + addpadding(tiksize, 64);
-	u32 datapos = tmdpos + addpadding(tmdsize, 64);
+	wadd->certpos = 0x40;
+	wadd->tikpos = 0x40 + addpadding(wadd->certsize, 64);
+	wadd->tmdpos = wadd->tikpos + addpadding(wadd->tiksize, 64);
+	wadd->datapos = wadd->tmdpos + addpadding(wadd->tmdsize, 64);
 
-	char* titleid = calloc(5, sizeof(u8));
-	memcpy(titleid, &data[tmdpos + 0x190], 4);
 
-	if (strcmp(titleid, "NACJ") != 0 && strcmp(titleid, "NACE") != 0 && strcmp(titleid, "NGZE") != 0 && strcmp(titleid, "NGZJ")) {
-		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
+
+	if (strcmp((char*)data + wadd->tmdpos + 0x190, "NACJ") != 0 && strcmp((char*)data + wadd->tmdpos + 0x190, "NACE") != 0 && strcmp((char*)data + wadd->tmdpos + 0x190, "NGZE") != 0 && strcmp((char*)data + wadd->tmdpos + 0x190, "NGZJ")) {
+		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, data + wadd->tmdpos + 0x190);
 		char ans;
 		scanf("%c", &ans);
 		while (ans != 'y' && ans != 'n') {
-			printf("\r\n%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
+			printf("\r\n%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, data + wadd->tmdpos + 0x190);
 			scanf("%c", &ans);
 		}
 		printf("\r\n");
@@ -443,59 +458,63 @@ void do_extract() {
 		}
 	}
 
-	if (cleanup == 1) removedir(directory);
+	if (writefiles) {
+		if (cleanup == 1) removedir(directory);
 
-	mkdir(directory, 0755);
-	chdir(directory);
-
-	u16 contentcount = be16(data + tmdpos + 0x1de);
-
-	if (verbose == 1) {
-		printf("Writing cert.cert.\r\n");
+		mkdir(directory, 0755);
+		chdir(directory);
 	}
-	FILE* outfile = fopen("cert.cert", "wb");
-	fwrite(data + certpos, 1, certsize, outfile);
-	fclose(outfile);
 
-	if (verbose == 1) {
-		printf("Writing ticket.tik.\r\n");
-	}
-	outfile = fopen("ticket.tik", "wb");
-	fwrite(data + tikpos, 1, tiksize, outfile);
-	fclose(outfile);
+	wadd->contentcount = be16(data + wadd->tmdpos + 0x1de);
 
-	if (verbose == 1) {
-		printf("Writing metadata.tmd.\r\n");
+	if (writefiles) {
+		if (verbose == 1) {
+			printf("Writing cert.cert.\r\n");
+		}
+		FILE* outfile = fopen("cert.cert", "wb");
+		fwrite(data + wadd->certpos, 1, wadd->certsize, outfile);
+		fclose(outfile);
+
+		if (verbose == 1) {
+			printf("Writing ticket.tik.\r\n");
+		}
+		outfile = fopen("ticket.tik", "wb");
+		fwrite(data + wadd->tikpos, 1, wadd->tiksize, outfile);
+		fclose(outfile);
+
+		if (verbose == 1) {
+			printf("Writing metadata.tmd.\r\n");
+		}
+		outfile = fopen("metadata.tmd", "wb");
+		fwrite(data + wadd->tmdpos, 1, wadd->tmdsize, outfile);
+		fclose(outfile);
 	}
-	outfile = fopen("metadata.tmd", "wb");
-	fwrite(data + tmdpos, 1, tmdsize, outfile);
-	fclose(outfile);
 
 	unsigned char encryptedkey[16], iv[16];
 
 	u8 i, j;
 	for (i = 0; i < 16; i++) {
-		encryptedkey[i] = data[tikpos + 0x1bf + i];
+		encryptedkey[i] = data[wadd->tikpos + 0x1bf + i];
 	}
 	for (i = 0; i < 8; i++) {
-		iv[i] = data[tikpos + 0x1dc + i];
+		iv[i] = data[wadd->tikpos + 0x1dc + i];
 		iv[i + 8] = 0x00;
 	}
-;
+	;
 	do_decrypt(encryptedkey, 16, key, iv);
 
 	for (j = 2; j < 16; j++) iv[j] = 0x00;
 
-	for (i = 0; i < contentcount; i++) {
-		u32 contentpos = datapos;
+	for (i = 0; i < wadd->contentcount; i++) {
+		u32 contentpos = wadd->datapos;
 		for (j = 0; j < i; j++) {
-			contentpos = contentpos + addpadding(getcontentlength(data + tmdpos, j), 64);
+			contentpos = contentpos + addpadding(getcontentlength(data + wadd->tmdpos, j), 64);
 		}
 
-		iv[0] = data[tmdpos + 0x1e8 + (0x24 * i)];
-		iv[1] = data[tmdpos + 0x1e9 + (0x24 * i)];
+		iv[0] = data[wadd->tmdpos + 0x1e8 + (0x24 * i)];
+		iv[1] = data[wadd->tmdpos + 0x1e9 + (0x24 * i)];
 
-		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
+		u32 size = addpadding(getcontentlength(data + wadd->tmdpos, i), 16);
 
 		if (verbose == 1) {
 			printf("Decrypting contents %d.\r\n", i);
@@ -508,67 +527,89 @@ void do_extract() {
 			if (verbose == 1) {
 				printf("Extracting content 5 U8 Archive.\r\n");
 			}
-			mkdir("content5", 0755);
-			chdir("content5");
-			u8_header header;
-			u32 data_offset;
-			u8 *string_table;
-			size_t rest_size;
+			extract_u8_archive(data + contentpos, "content5");
+		}
 
-			memcpy(&header, data + contentpos, sizeof(header));
-
-			int curpos = contentpos + sizeof(header);
-
-			u8_node root_node;
-			memcpy(&root_node, data + curpos, sizeof(u8_node));
-			curpos += sizeof(u8_node);
-
-			u32 nodec = be32((u8*)&root_node.size) - 1;
-
-			u8_node *nodes = malloc(sizeof(u8_node)*nodec);
-			memcpy(nodes, data + curpos, sizeof(u8_node)*nodec);
-			curpos += sizeof(u8_node)*nodec;
-
-			data_offset = be32((u8*)&header.data_offset);
-			rest_size = data_offset - sizeof(header) - (nodec + 1) * sizeof(u8_node);
-			string_table = malloc(rest_size);
-			memcpy(string_table, data + curpos, rest_size);
-
-			u8_node *node;
-			for (j = 0; j < nodec; j++) {
-				node = &nodes[j];
-				u32 doffset = be32((u8*)&node->data_offset);
-				u32 dsize = be32((u8*)&node->size);
-				u16 name_offset = be16((u8*)&node->name_offset);
-				u16 type = be16((u8*)&node->type);
-				char *name = (char*)&string_table[name_offset];
-				if (type == 0x00) {
-					if (verbose == 1) {
-						printf("Extracting and writing content5/%s.\r\n", name);
-					}
-					outfile = fopen(name, "wb");
-					fwrite(data + contentpos + doffset, 1, dsize, outfile);
-					fclose(outfile);
-				}
+		if (writefiles) {
+			char *contentname = malloc(100);
+			FILE *outfile;
+			snprintf(contentname, 100, "content%d.app", i);
+			if (verbose == 1) {
+				printf("Writing %s.\r\n", contentname);
 			}
-			chdir("..");
-			free(string_table);
-			free(nodes);
+			outfile = fopen(contentname, "wb");
+			fwrite(data + contentpos, 1, getcontentlength(data + wadd->tmdpos, i), outfile);
+			fclose(outfile);
+			free(contentname);
 		}
-
-		char *contentname = malloc(100);
-		snprintf(contentname, 100, "content%d.app", i);
-		if (verbose == 1) {
-			printf("Writing %s.\r\n", contentname);
-		}
-		outfile = fopen(contentname, "wb");
-		fwrite(data + contentpos, 1, getcontentlength(data + tmdpos, i), outfile);
-		fclose(outfile);
-		free(contentname);
 	}
-	chdir("..");
-	free(data);
+	if (writefiles) {
+		chdir("..");
+	}
 
+}
+
+void get_u8_meta(u8 *data, u8_meta *meta) {
+	meta->header = *((u8_header*)data);
+	u32 curPos = sizeof(u8_header);
+	meta->root_node = *((u8_node*)(data + curPos));
+	curPos += sizeof(u8_node);
+	meta->nodec = be32((u8*)&meta->root_node.size) - 1;
+	meta->nodes = (u8_node*)(data + curPos);
+	curPos += sizeof(u8_node) * meta->nodec;
+	meta->table_size = be32((u8*)(&meta->header.data_offset)) - sizeof(u8_header) - ((meta->nodec + 1) * sizeof(u8_node));
+	meta->string_table = data + curPos;
+
+}
+
+void extract_u8_archive(u8* data, const char* outdir) {
+	int j;
+	FILE *outfile;
+	char *curdir = malloc(300);
+	getcwd(curdir, 300);
+	mkdir(outdir, 0755);
+	chdir(outdir);
+	u8_node *node;
+
+	u8_meta *meta = malloc(sizeof(u8_meta));
+	get_u8_meta(data, meta);
+
+	for (j = 0; j < meta->nodec; j++) {
+		node = &meta->nodes[j];
+		u32 doffset = be32((u8*)&node->data_offset);
+		u32 dsize = be32((u8*)&node->size);
+		u16 name_offset = be16((u8*)&node->name_offset);
+		u16 type = be16((u8*)&node->type);
+		char *name = (char*)&meta->string_table[name_offset];
+		if (type == 0x00) {
+			if (verbose == 1) {
+				printf("Extracting and writing %s/%s.\r\n", outdir, name);
+			}
+			outfile = fopen(name, "wb");
+			fwrite(data + doffset, 1, dsize, outfile);
+			fclose(outfile);
+		}
+	}
+	chdir(curdir);
+	free(meta);
+	free(curdir);
+}
+
+// Replaces the rom...at this point we assume the src/dst rom are the same size which they should always be 32M
+void replace_rom(u8* u8archive, u8* rom, size_t size) {
+	u8_meta *meta = malloc(sizeof(u8_meta));
+	get_u8_meta(u8archive, meta);
+	int i;
+	u8_node *node;
+	// Reverse search...I believe rom is always towards the end of nodes
+	for (i = meta->nodec; i > 0; i--) {
+		node = &meta->nodes[i];
+		if (strcmp((char*)&meta->string_table[be16((u8*)&node->name_offset)], "rom") == 0) {
+			memcpy(u8archive + be32((u8*)&node->data_offset), rom, size);
+			break;
+		}
+	}
+	free(meta);
 }
 
 void do_pack(const char *titleid, const char *channelname) {
@@ -596,7 +637,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	u32 datasize = 0;
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
-	u32 certsize = sbuffer.st_size;
+	u32 certsize = sbuffer.st_size;	
 
 	stat("ticket.tik", &sbuffer);
 	u32 tiksize = sbuffer.st_size;
@@ -636,161 +677,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	footer[1] = 0x5A;
 	u32 footersize = 0x40;
 
-	// Build Content5 into a .app file first
-	DIR *dir;
-	struct dirent *ent;
-
-	u8 nodec = 0;
-
-	chdir("content5");
-	if (verbose == 1) {
-		printf("Generating content5 U8 Archive information\r\n");
-	}
-	if ((dir = opendir(".")) != NULL) {
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-				nodec++;
-			}
-		}
-		closedir(dir);
-	}
-
-	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
-
-	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
-	memset(string_table, 0, (nodec * 100 * sizeof(u8)));
-	string_table[0] = 0x00;
-	string_table[1] = 0x2e;
-	string_table[2] = 0x00;
-	u16 j = 1;
-
-	// Root Directory node. 
-	u8_node *node = &nodes[0];
-	node->data_offset = 0x00;
-	node->name_offset = 0x0100;
-	node->data_offset = 0x00;
-	node->size = 0x61000000;
-	node->type = 0x0001;
-
-	u16 noff = 3;
-	u32 doff = 0;
-	if ((dir = opendir(".")) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-
-				node = &nodes[j];
-				node->type = 0x0000;
-				node->name_offset = noff;
-
-				size_t nlen = strlen(ent->d_name) + 1;
-				memcpy(string_table + noff, ent->d_name, nlen);
-				noff += nlen;
-
-				stat(ent->d_name, &sbuffer);
-
-				node->data_offset = doff;
-				node->size = sbuffer.st_size;
-
-				doff += addpadding(sbuffer.st_size, 32);
-
-				j++;
-			}
-		}
-		closedir(dir);
-	}
-	u16 k;
-	u8 prevchar = 1;
-	for (k = 0; k < nodec * 100; k++) {
-		if (prevchar == 0 && string_table[k] == 0) {
-			break;
-		}
-		prevchar = string_table[k];
-	}
-
-
-
-	u8 *data = calloc(doff, sizeof(u8));
-	u32 curpos = 0;
-
-	if (verbose == 1) {
-		printf("Reading U8 Archive Files\r\n");
-	}
-	if ((dir = opendir(".")) != NULL) {
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-				if (verbose == 1) {
-					printf("Reading wadextract/content5/%s\r\n", ent->d_name);
-				}
-				stat(ent->d_name, &sbuffer);
-				FILE *fle = fopen(ent->d_name, "rb");
-				fread(data + curpos, 1, sbuffer.st_size, fle);
-				fclose(fle);
-				curpos += addpadding(sbuffer.st_size, 32);
-
-			}
-		}
-		closedir(dir);
-	}
-
-
-	chdir("..");
-
-	if (verbose == 1) {
-		printf("Exporting new U8 Archive to content5.app\r\n");
-	}
-
-
-
-	u8_header header;
-	header.tag = 0x2D38AA55; // 0x55AA382D 
-	header.rootnode_offset = 0x20; // 0x00000020
-	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
-	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
-	memset(header.padding, 0, 16);
-
-	u32 dataoffset = header.data_offset;
-	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
-
-
-	FILE *foutfile = fopen("content5.app", "wb");
-
-	header.header_size = REVERSEENDIAN32(header.header_size);
-	header.data_offset = REVERSEENDIAN32(header.data_offset);
-	header.rootnode_offset = REVERSEENDIAN32(header.rootnode_offset);
-	fwrite(&header, 1, sizeof(u8_header), foutfile);
-
-	u8_node rootnode;
-	rootnode.name_offset = 0x00;
-	rootnode.data_offset = 0x00;
-	rootnode.size = nodec + 2;
-	rootnode.type = 0x0001;
-	rootnode.size = REVERSEENDIAN32(rootnode.size);
-	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
-
-	for (j = 1; j <= nodec; j++) {
-		node = &nodes[j];
-		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
-		node->size = REVERSEENDIAN32(node->size);
-		node->name_offset = REVERSEENDIAN16(node->name_offset);
-	}
-	fwrite(nodes, 1, sizeof(u8_node) * (nodec + 1), foutfile);
-	free(nodes);
-
-	fwrite(string_table, 1, k, foutfile);
-	free(string_table);
-
-	u8 *padding = calloc(padcount, sizeof(u8));
-	fwrite(padding, 1, padcount, foutfile);
-	free(padding);
-
-	fwrite(data, 1, doff, foutfile);
-	free(data);
-
-	fclose(foutfile);
+	pack_u8_archive("content5", "content5.app");
 
 	if (verbose == 1) {
 		printf("Modifying content metadata in the TMD\r\n");
@@ -923,7 +810,7 @@ void do_pack(const char *titleid, const char *channelname) {
 
 			memset(&contents[contentpos + 0x630], 0x00, 0x10);
 
-			
+
 			u8 md5digest[16];
 			do_md5(contents + contentpos + 64, md5digest, 1536);
 
@@ -939,52 +826,10 @@ void do_pack(const char *titleid, const char *channelname) {
 
 
 			// Memory fix 
-			contents[contentpos + 0x2EB0] = 0x60;
-			contents[contentpos + 0x2EB1] = 0x00;
-			contents[contentpos + 0x2EB3] = 0x00;
+			memory_fix(contents + contentpos);
 
 			if (disablemappings == 0) {
-				if (verbose == 1) {
-					printf("\tController D-Pad Up\r\n");
-				}
-				// Mapping fix
-				// DUP
-				contents[contentpos + 0x16BAF0] = 0x08;
-				contents[contentpos + 0x16BAF1] = 0x00;
-
-				if (verbose == 1) {
-					printf("\tController D-Pad Down\r\n");
-				}
-				// DDown
-				contents[contentpos + 0x16BAF4] = 0x04;
-				contents[contentpos + 0x16BAF5] = 0x00;
-				if (verbose == 1) {
-					printf("\tController D-Pad Left\r\n");
-				}
-				// DLEFT
-				contents[contentpos + 0x16BAF8] = 0x02;
-				contents[contentpos + 0x16BAF9] = 0x00;
-				if (verbose == 1) {
-					printf("\tController D-Pad Right\r\n");
-				}
-				// DRIGHT
-				contents[contentpos + 0x16BAFC] = 0x01;
-				contents[contentpos + 0x16BAFD] = 0x00;
-
-
-				if (raphnet == 1) {
-					if (verbose == 1) {
-						printf("\tController Z to L For Raphnet\r\n");
-					}
-					contents[contentpos + 0x16BAD9] = 0x20;
-				}
-				else {
-					if (verbose == 1) {
-						printf("\tController C-Stick-Down to L\r\n");
-					}
-					// CStick Down -> L
-					contents[contentpos + 0x16BB05] = 0x20;
-				}
+				controller_remapping(contents + contentpos);
 			}
 		}
 
@@ -995,7 +840,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		if (verbose == 1) {
 			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
 		}
-		
+
 		u8 digest[20];
 		do_sha1(contents + contentpos, digest, getcontentlength(tmd, i));
 
@@ -1004,7 +849,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		if (verbose == 1) {
 			printf("Encrypting content %d\r\n", i);
 		}
-		
+
 		do_encrypt(contents + contentpos, size, newenc, iv);
 
 	}
@@ -1078,6 +923,223 @@ void do_pack(const char *titleid, const char *channelname) {
 
 }
 
+void read_contents(u8 *data) {
+
+}
+
+void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t size) {
+
+	char *curdir = malloc(300);
+	getcwd(curdir, 300);
+
+	// Build Content5 into a .app file first
+	DIR *dir;
+	struct dirent *ent;
+
+	u8 nodec = 0;
+
+	chdir(u8dir);
+
+
+
+	if (verbose == 1) {
+		printf("Generating %s U8 Archive information\r\n",u8dir);
+	}
+	if ((dir = opendir(".")) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
+				nodec++;
+			}
+		}
+		closedir(dir);
+	}
+
+	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
+
+	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
+	string_table[1] = 0x2e; // Root Filename is . 
+
+	u16 j = 1;
+
+	// Root Directory node. 
+	u8_node *node = &nodes[0];
+	node->data_offset = 0x00;
+	node->name_offset = 0x0100;
+	node->data_offset = 0x00;
+	node->size = 0x61000000;
+	node->type = 0x0001;
+
+	u16 noff = 3;
+	u32 doff = 0;
+	if ((dir = opendir(".")) != NULL) {
+		/* print all the files and directories within directory */
+		while ((ent = readdir(dir)) != NULL) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
+
+				node = &nodes[j];
+				node->type = 0x0000;
+				node->name_offset = noff;
+
+				size_t nlen = strlen(ent->d_name) + 1;
+				memcpy(string_table + noff, ent->d_name, nlen);
+				noff += nlen;
+
+				stat(ent->d_name, &sbuffer);
+
+				node->data_offset = doff;
+				node->size = sbuffer.st_size;
+
+				doff += addpadding(sbuffer.st_size, 32);
+
+				j++;
+			}
+		}
+		closedir(dir);
+	}
+	u16 k;
+	u8 prevchar = 1;
+	for (k = 0; k < nodec * 100; k++) {
+		if (prevchar == 0 && string_table[k] == 0) {
+			break;
+		}
+		prevchar = string_table[k];
+	}
+
+
+
+	u8 *data = calloc(doff, sizeof(u8));
+	u32 curpos = 0;
+
+	if (verbose == 1) {
+		printf("Reading U8 Archive Files\r\n");
+	}
+	if ((dir = opendir(".")) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
+			stat(ent->d_name, &sbuffer);
+			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
+				if (verbose == 1) {
+					printf("Reading %s/%s\r\n", u8dir, ent->d_name);
+				}
+				stat(ent->d_name, &sbuffer);
+				FILE *fle = fopen(ent->d_name, "rb");
+				fread(data + curpos, 1, sbuffer.st_size, fle);
+				fclose(fle);
+				curpos += addpadding(sbuffer.st_size, 32);
+
+			}
+		}
+		closedir(dir);
+	}
+
+	if (verbose == 1) {
+		printf("Exporting new U8 Archive to %s\r\n",outfile);
+	}
+
+
+
+	u8_header header;
+	header.tag = 0x2D38AA55; // 0x55AA382D 
+	header.rootnode_offset = 0x20; // 0x00000020
+	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
+	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
+	memset(header.padding, 0, 16);
+
+	u32 dataoffset = header.data_offset;
+	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
+
+
+	FILE *foutfile = fopen(outfile, "wb");
+
+	header.header_size = REVERSEENDIAN32(header.header_size);
+	header.data_offset = REVERSEENDIAN32(header.data_offset);
+	header.rootnode_offset = REVERSEENDIAN32(header.rootnode_offset);
+	fwrite(&header, 1, sizeof(u8_header), foutfile);
+
+	u8_node rootnode;
+	rootnode.name_offset = 0x00;
+	rootnode.data_offset = 0x00;
+	rootnode.size = nodec + 2;
+	rootnode.type = 0x0001;
+	rootnode.size = REVERSEENDIAN32(rootnode.size);
+	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
+
+	for (j = 1; j <= nodec; j++) {
+		node = &nodes[j];
+		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
+		node->size = REVERSEENDIAN32(node->size);
+		node->name_offset = REVERSEENDIAN16(node->name_offset);
+	}
+	fwrite(nodes, 1, sizeof(u8_node) * (nodec + 1), foutfile);
+	free(nodes);
+
+	fwrite(string_table, 1, k, foutfile);
+	free(string_table);
+
+	u8 *padding = calloc(padcount, sizeof(u8));
+	fwrite(padding, 1, padcount, foutfile);
+	free(padding);
+
+	fwrite(data, 1, doff, foutfile);
+	free(data);
+
+	fclose(foutfile);
+
+	chdir(curdir);
+	free(curdir);
+}
+
+void memory_fix(u8 *data) {
+	data[0x2EB0] = 0x60;
+	data[0x2EB1] = 0x00;
+	data[0x2EB3] = 0x00;
+}
+
+void controller_remapping(u8 *data) {
+	if (verbose == 1) {
+		printf("\tController D-Pad Up\r\n");
+	}
+	// Mapping fix
+	// DUP
+	data[0x16BAF0] = 0x08;
+	data[0x16BAF1] = 0x00;
+
+	if (verbose == 1) {
+		printf("\tController D-Pad Down\r\n");
+	}
+	// DDown
+	data[ 0x16BAF4] = 0x04;
+	data[0x16BAF5] = 0x00;
+	if (verbose == 1) {
+		printf("\tController D-Pad Left\r\n");
+	}
+	// DLEFT
+	data[0x16BAF8] = 0x02;
+	data[0x16BAF9] = 0x00;
+	if (verbose == 1) {
+		printf("\tController D-Pad Right\r\n");
+	}
+	// DRIGHT
+	data[0x16BAFC] = 0x01;
+	data[0x16BAFD] = 0x00;
+
+
+	if (raphnet == 1) {
+		if (verbose == 1) {
+			printf("\tController Z to L For Raphnet\r\n");
+		}
+		data[0x16BAD9] = 0x20;
+	}
+	else {
+		if (verbose == 1) {
+			printf("\tController C-Stick-Down to L\r\n");
+		}
+		// CStick Down -> L
+		data[0x16BB05] = 0x20;
+	}
+}
+
 void genkey() {
 	printf("Enter 45e and press enter: ");
 	char *line = malloc(4);
@@ -1096,7 +1158,7 @@ void genkey() {
 	do_decrypt(outkey, 16, newkey, iv);
 
 	free(line);
-	
+
 	if (keyfile == NULL)  keyfile = "common-key.bin";
 	FILE *keyf = fopen(keyfile, "wb");
 	fwrite(&outkey, 1, 16, keyf);
