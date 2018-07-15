@@ -5,8 +5,8 @@ exec_prefix = @exec_prefix@
 bindir		= @bindir@
 PROGNAME	= gzinject
 LDFLAGS		= -s @LDFLAGS@
-SRC			= gzinject.c
-LIBS		= -l:libcrypto.a -lgdi32 -lws2_32
+SRC			= *.c
+LIBS		= 
 
 .PHONY		: all install clean distclean
 
