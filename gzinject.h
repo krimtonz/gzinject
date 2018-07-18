@@ -78,4 +78,6 @@ void pack_u8_archive(u8*,u8*,size_t);
 void get_u8_meta(u8*, u8_meta*);
 void replace_rom(u8*, u8*, size_t);
 u32 getcontentpos(u8*, wad_t*, unsigned int);
+void memory_fix(u8*);
+void controller_remapping(u8*);
 #endif

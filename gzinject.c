@@ -6,15 +6,9 @@
 #include <unistd.h>
 #include <getopt.h>
 #include "gzinject.h"
-#ifdef _USE_LIBCRYPTO
-#include <openssl/evp.h>
-#include <openssl/md5.h>
-#include <openssl/sha.h>
-#else
 #include "aes.h"
 #include "sha1.h"
 #include "md5.h"
-#endif
 
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)
@@ -50,40 +44,6 @@ unsigned char newkey[16] = {
 	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
 };
 
-#ifdef _USE_LIBCRYPTO
-inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
-	u8 *encrypted = malloc(size * 2);
-	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-	int len;
-	EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
-	EVP_EncryptUpdate(ctx, encrypted, &len, input, size);
-	EVP_EncryptFinal_ex(ctx, encrypted + len, &len);
-	EVP_CIPHER_CTX_free(ctx);
-	memcpy(input, encrypted, size);
-	free(encrypted);
-}
-
-inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
-	u8 *decrypted = malloc(size);
-	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-	int len;
-	EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
-	EVP_DecryptUpdate(ctx, decrypted, &len, input, size);
-	EVP_DecryptFinal_ex(ctx, decrypted + len, &len);
-	EVP_CIPHER_CTX_free(ctx);
-	memcpy(input, decrypted, size);
-	free(decrypted);
-}
-
-inline void do_sha1(u8 *input, u8 *output, size_t size) {
-	SHA1(input, size, output);
-}
-
-inline void do_md5(u8 *input, u8 *output, size_t size) {
-	MD5(input, size, output);
-}
-#else
-
 inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
 	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 	AES_init_ctx_iv(aes, key, iv);
@@ -112,7 +72,6 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 	MD5_Update(md5, input, size);
 	MD5_Final(output, md5);
 }
-#endif
 
 int main(int argc, char **argv) {
 	setbuf(stdout, NULL);
@@ -264,8 +223,8 @@ int main(int argc, char **argv) {
 
 		}
 		do_extract(data, waddata);
-		
-		
+
+
 
 		if (verbose == 1) {
 			printf("Copying %s to %s/content5/rom\r\n", rom, directory);
@@ -637,7 +596,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	u32 datasize = 0;
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
-	u32 certsize = sbuffer.st_size;	
+	u32 certsize = sbuffer.st_size;
 
 	stat("ticket.tik", &sbuffer);
 	u32 tiksize = sbuffer.st_size;
@@ -825,7 +784,7 @@ void do_pack(const char *titleid, const char *channelname) {
 			}
 
 
-			// Memory fix 
+			// Memory fix
 			memory_fix(contents + contentpos);
 
 			if (disablemappings == 0) {
@@ -927,7 +886,7 @@ void read_contents(u8 *data) {
 
 }
 
-void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t size) {
+size_t pack_u8_archive(const char *u8dir, u8* data) {
 
 	char *curdir = malloc(300);
 	getcwd(curdir, 300);
@@ -958,11 +917,11 @@ void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t siz
 	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
 
 	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
-	string_table[1] = 0x2e; // Root Filename is . 
+	string_table[1] = 0x2e; // Root Filename is .
 
 	u16 j = 1;
 
-	// Root Directory node. 
+	// Root Directory node.
 	u8_node *node = &nodes[0];
 	node->data_offset = 0x00;
 	node->name_offset = 0x0100;
@@ -971,7 +930,7 @@ void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t siz
 	node->type = 0x0001;
 
 	u16 noff = 3;
-	u32 doff = 0;
+	size_t doff = 0;
 	if ((dir = opendir(".")) != NULL) {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
@@ -1009,7 +968,7 @@ void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t siz
 
 
 
-	u8 *data = calloc(doff, sizeof(u8));
+	data = calloc(doff, sizeof(u8));
 	u32 curpos = 0;
 
 	if (verbose == 1) {
@@ -1040,7 +999,7 @@ void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t siz
 
 
 	u8_header header;
-	header.tag = 0x2D38AA55; // 0x55AA382D 
+	header.tag = 0x2D38AA55; // 0x55AA382D
 	header.rootnode_offset = 0x20; // 0x00000020
 	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
 	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
@@ -1088,6 +1047,7 @@ void pack_u8_archive(const char *u8dir, const char *outfile u8* data, size_t siz
 
 	chdir(curdir);
 	free(curdir);
+	return doff;
 }
 
 void memory_fix(u8 *data) {
