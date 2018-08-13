@@ -111,6 +111,7 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 	MD5_Init(md5);
 	MD5_Update(md5, input, size);
 	MD5_Final(output, md5);
+	free(md5);
 }
 #endif
 
@@ -442,6 +443,7 @@ void do_extract() {
 			return;
 		}
 	}
+	free(titleid);
 
 	if (cleanup == 1) removedir(directory);
 
