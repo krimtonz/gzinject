@@ -23,7 +23,9 @@
 
 unsigned char key[16];
 u8 region = 0x03;
-int cleanup = 0, verbose = 0, raphnet = 0, disablemappings = 0;
+
+int cleanup = 0, verbose = 0, raphnet = 0,
+	remap_cstick_down = 1, remap_dpad_up = 1, remap_dpad_down = 1, remap_dpad_right = 1, remap_dpad_left = 1;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
 	*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
 
@@ -40,7 +42,12 @@ static struct option cmdoptions[] = {
 	{ "cleanup", no_argument,&cleanup,1},
 	{"version",no_argument,0,'v'},
 	{"raphnet",no_argument,&raphnet,1},
-	{"disable-controller-remappings",no_argument,&disablemappings,1},
+	{"disable-controller-remappings",no_argument,0,'z'},
+	{ "disable-cstick-d-remapping",no_argument,&remap_cstick_down,0},
+	{"disable-dpad-u-remapping",no_argument,&remap_dpad_up,0},
+	{ "disable-dpad-d-remapping",no_argument,&remap_dpad_down,0},
+	{ "disable-dpad-r-remapping",no_argument,&remap_dpad_right,0},
+	{ "disable-dpad-l-remapping",no_argument,&remap_dpad_left,0},
 	{"rom",required_argument,0,'m'},
 	{"outputwad",required_argument,0,'o'},
 	{0,0,0,0}
@@ -165,9 +172,16 @@ int main(int argc, char **argv) {
 			break;
 		case 'm':
 			rom = optarg;
-			break;	
+			break;
 		case 'o':
 			outwad = optarg;
+			break;
+		case 'z':
+			remap_cstick_down = 0;
+			remap_dpad_down = 0;
+			remap_dpad_left = 0;
+			remap_dpad_right = 0;
+			remap_dpad_up = 0;
 			break;
 		default:
 			break;
@@ -186,7 +200,7 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action,"inject")!=0) {
+	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action, "inject") != 0) {
 
 		print_usage();
 		exit(0);
@@ -260,11 +274,11 @@ int main(int argc, char **argv) {
 		fclose(from);
 		free(inrom);
 		free(orom);
-		
+
 
 		char *wadname = removeext(wad),
 			*outname = malloc(strlen(wadname) + 12);
-		
+
 		sprintf(outname, "%s-inject.wad", wadname);
 		free(wadname);
 		if (outwad == NULL) {
@@ -273,7 +287,7 @@ int main(int argc, char **argv) {
 		else {
 			wad = outwad;
 		}
-		
+
 		do_pack(channelid, channeltitle);
 		free(outname);
 	}
@@ -311,7 +325,7 @@ u32 be32(const u8 *p)
 }
 
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -o, --outputwad wad\t\t\t\tDefines the filename to output to when using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -o, --outputwad wad\t\t\t\tDefines the filename to output to when using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    --disable-cstick-d-remapping\t\tDisables c-stick down remapping\r\n    --disable-dpad-d-remapping\t\t\tDisables dpad-down remapping\r\n    --disable-dpad-u-remapping\t\t\tDisables dpad-up remapping\r\n    --disable-dpad-l-remapping\t\t\tDisables dpad-left remapping\r\n    --disable-dpad-r-remapping\t\t\tDisables dpad-right remapping\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";
 	printf("%s\r\n", usage);
 }
 
@@ -483,7 +497,7 @@ void do_extract() {
 		iv[i] = data[tikpos + 0x1dc + i];
 		iv[i + 8] = 0x00;
 	}
-;
+	;
 	do_decrypt(encryptedkey, 16, key, iv);
 
 	for (j = 2; j < 16; j++) iv[j] = 0x00;
@@ -925,7 +939,7 @@ void do_pack(const char *titleid, const char *channelname) {
 
 			memset(&contents[contentpos + 0x630], 0x00, 0x10);
 
-			
+
 			u8 md5digest[16];
 			do_md5(contents + contentpos + 64, md5digest, 1536);
 
@@ -945,7 +959,7 @@ void do_pack(const char *titleid, const char *channelname) {
 			contents[contentpos + 0x2EB1] = 0x00;
 			contents[contentpos + 0x2EB3] = 0x00;
 
-			if (disablemappings == 0) {
+			if (remap_dpad_up) {
 				if (verbose == 1) {
 					printf("\tController D-Pad Up\r\n");
 				}
@@ -953,26 +967,29 @@ void do_pack(const char *titleid, const char *channelname) {
 				// DUP
 				contents[contentpos + 0x16BAF0] = 0x08;
 				contents[contentpos + 0x16BAF1] = 0x00;
-
+			}if (remap_dpad_down) {
 				if (verbose == 1) {
 					printf("\tController D-Pad Down\r\n");
 				}
 				// DDown
 				contents[contentpos + 0x16BAF4] = 0x04;
 				contents[contentpos + 0x16BAF5] = 0x00;
+			}if (remap_dpad_left) {
 				if (verbose == 1) {
 					printf("\tController D-Pad Left\r\n");
 				}
 				// DLEFT
 				contents[contentpos + 0x16BAF8] = 0x02;
 				contents[contentpos + 0x16BAF9] = 0x00;
+			}if (remap_dpad_right) {
 				if (verbose == 1) {
 					printf("\tController D-Pad Right\r\n");
 				}
 				// DRIGHT
 				contents[contentpos + 0x16BAFC] = 0x01;
 				contents[contentpos + 0x16BAFD] = 0x00;
-
+			}
+			if (remap_cstick_down) {
 
 				if (raphnet == 1) {
 					if (verbose == 1) {
@@ -987,6 +1004,7 @@ void do_pack(const char *titleid, const char *channelname) {
 					// CStick Down -> L
 					contents[contentpos + 0x16BB05] = 0x20;
 				}
+
 			}
 		}
 
@@ -997,7 +1015,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		if (verbose == 1) {
 			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
 		}
-		
+
 		u8 digest[20];
 		do_sha1(contents + contentpos, digest, getcontentlength(tmd, i));
 
@@ -1006,7 +1024,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		if (verbose == 1) {
 			printf("Encrypting content %d\r\n", i);
 		}
-		
+
 		do_encrypt(contents + contentpos, size, newenc, iv);
 
 	}
@@ -1098,7 +1116,7 @@ void genkey() {
 	do_decrypt(outkey, 16, newkey, iv);
 
 	free(line);
-	
+
 	if (keyfile == NULL)  keyfile = "common-key.bin";
 	FILE *keyf = fopen(keyfile, "wb");
 	fwrite(&outkey, 1, 16, keyf);

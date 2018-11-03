@@ -12,29 +12,37 @@ Prebuilt Windows executable is contained under releases (https://github.com/krim
 
 ## Usage 
 
-```
-Usage: gzinject -a,--action=(genkey | extract | pack) [options]
-  options:
-    -a, --action (genkey | extract | pack)		Defines the action to run
-      genkey: generates a common key
-      extract: extracts contents of wadfile specified by --wad to --directory
-      pack: packs contents --directory  into wad specified by --wad
-      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad
-    -w, --wad wadfile					Defines the wadfile to use Input wad for extracting, output wad for packing
-    -d, --directory directory				Defines the output directory for extract operations, or the input directory for pack operations
-	-m, --rom rom					Defines the rom to inject using -a inject 
-	-o, --outputwad wad				Defines the filename to output to when using -a inject
-    -i, --channelid channelid				Changes the channel id during packing (4 characters)
-    -t, --channeltitle channeltitle			Changes the channel title during packing (max 20 characters)
-    -r, --region [0-3]					Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
-	--raphnet					Maps Z To L instead of c-stick down, for N64->GC Raphnet Adapters
-	--disable-controller-remappings			Disables all controller remappings during packing
-    -k, --key keyfile					Uses the specified common key file
-	--cleanup					Cleans up the wad directory before extracting or after packing
-    --verbose						Prints verbose information
-    -v, --version					Prints version information
-    -?, --help						Prints this help message
-```
+    Usage: gzinject -a,--action=(genkey | extract | pack) [options]
+      options:
+      -a, --action (genkey | extract | pack)    Defines the action to run
+        genkey: generates a common key
+        extract: extracts contents of wadfile specified by --wad to --directory
+        pack: packs contents --directory  into wad specified by --wad
+        inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad
+    
+	  -w, --wad wadfile                       Defines the wadfile to use Input wad for extracting, output wad for packing
+      -d, --directory directory               Defines the output directory for extract operations, or the input directory for pack operations
+      -m, --rom rom                           Defines the rom to inject using -a inject 
+      -o, --outputwad wad                     Defines the filename to output to when using -a inject
+      -i, --channelid channelid               Changes the channel id during packing (4 characters)
+      -t, --channeltitle channeltitle         Changes the channel title during packing (max 20 characters)
+      -r, --region [0-3]                      Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
+      --raphnet                               Maps Z To L instead of c-stick down, for N64->GC Raphnet Adapters
+      
+      disable remapping options:
+          --disable-controller-remappings         Disables all controller remappings during packing
+          --disable-cstick-d-remapping            Disables c-stick down remapping
+          --disable-dpad-d-remapping               Disables dpad-down remapping
+          --disable-dpad-u-remapping               Disables dpad-up remapping
+          --disable-dpad-l-remapping               Disables dpad-right remapping
+          --disable-dpad-r-remapping               Disables dpad-left remapping
+
+      -k, --key keyfile                       Uses the specified common key file
+      --cleanup                               Cleans up the wad directory before extracting or after packing
+      --verbose                               Prints verbose information
+      -v, --version                           Prints version information
+      -?, --help                              Prints this help message
+
 
 ## Thanks/Authors
 
