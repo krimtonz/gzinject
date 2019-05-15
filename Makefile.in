@@ -19,7 +19,7 @@ distclean	: clean
 	rm -f Makefile
 
 install		:
-	install -p -D --target-directory=$(bindir) $(PROGNAME)
+	install -p -D -t $(bindir) $(PROGNAME)
 
 $(PROGNAME) : $(SRC)
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
