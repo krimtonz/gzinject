@@ -8,7 +8,12 @@
 
 #define W_TIK 0x00
 #define W_TMD 0x01
-#define GZINJECT_VERSION "0.2.2"
+#define GZINJECT_VERSION "0.3.0"
+
+typedef enum{
+    FILE_DIRECTORY,
+    FILE_NORMAL
+}filetype_t;
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -30,6 +35,14 @@ typedef struct
 	u32 data_offset;
 	u8 padding[16];
 } u8_header;
+
+typedef struct node_entry_s node_entry_t;
+
+struct node_entry_s {
+    u8_node node;
+    char *filename;
+    node_entry_t *directory;
+};
 
 u16 be16(const u8 *p);
 u32 be32(const u8 *p);

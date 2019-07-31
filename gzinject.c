@@ -19,6 +19,9 @@
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)
 #define getcwd(X,Y) _getcwd(X,Y)
+#define PATH_SEPARATOR '\\'
+#else
+#define PATH_SEPARATOR '/'
 #endif
 
 unsigned char key[16];
@@ -50,6 +53,7 @@ static struct option cmdoptions[] = {
 	{ "disable-dpad-l-remapping",no_argument,&remap_dpad_left,0},
 	{"rom",required_argument,0,'m'},
 	{"outputwad",required_argument,0,'o'},
+    {"patch-file",required_argument,0,'p'},
 	{0,0,0,0}
 };
 
@@ -91,21 +95,21 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 }
 #else
 
-inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+ void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
 	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 	AES_init_ctx_iv(aes, key, iv);
 	AES_CBC_encrypt_buffer(aes, input, size);
 	free(aes);
 }
 
-inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+ void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
 	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 	AES_init_ctx_iv(aes, key, iv);
 	AES_CBC_decrypt_buffer(aes, input, size);
 	free(aes);
 }
 
-inline void do_sha1(u8 *input, u8 *output, size_t size) {
+ void do_sha1(u8 *input, u8 *output, size_t size) {
 	SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
 	SHA1Init(sha1);
 	SHA1Update(sha1, input, size);
@@ -113,7 +117,7 @@ inline void do_sha1(u8 *input, u8 *output, size_t size) {
 	free(sha1);
 }
 
-inline void do_md5(u8 *input, u8 *output, size_t size) {
+ void do_md5(u8 *input, u8 *output, size_t size) {
 	MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
 	MD5_Init(md5);
 	MD5_Update(md5, input, size);
@@ -122,19 +126,82 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 }
 #endif
 
+void get_dir_contents_recursive(const char *dirname, node_entry_t ***nodes, u8 *idx, node_entry_t *directory, int recursion){
+    struct stat sbuffer;
+    node_entry_t **node_array = *nodes;
+    DIR *dir;
+	struct dirent *ent;
+    chdir(dirname);
+	if ((dir = opendir(".")) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
+            if(ent->d_name[0]=='.') continue;
+            u8 this_idx = *idx;
+            node_entry_t **new_nodes = realloc(node_array, ((this_idx+1) * sizeof(*node_array)));
+            node_array = new_nodes;
+            size_t len = strlen(ent->d_name);
+            char *name = malloc(strlen(ent->d_name) + 1);
+            strcpy(name,ent->d_name);
+            name[len] = 0;
+            node_entry_t *node = malloc(sizeof(node_entry_t));
+            node->filename = name;
+            node->directory = directory;
+            node->node.size = sbuffer.st_size;
+            stat(name, &sbuffer);
+            (*idx)++;
+			if ((sbuffer.st_mode & S_IFMT) == S_IFDIR) {
+                node->node.type = 0x0001;
+                node->node.size = recursion;
+                get_dir_contents_recursive(name,&node_array,idx,node,recursion+1);    
+                
+			}else{
+                node->node.type = 0x0000;
+            }
+            node_array[this_idx] = node;
+		}
+		closedir(dir);
+	}
+    chdir("..");
+    *nodes = node_array;
+}
+
+void sort_dir(node_entry_t **src, node_entry_t **dest, node_entry_t *dir, size_t total_cnt, int *pos){
+    for(int i=0;i<total_cnt;i++){
+        node_entry_t *node = src[i];
+        if(node->directory == dir && node->node.type==0x0000){
+            dest[(*pos)++] = node;
+        }
+    }
+    for(int i=0;i<total_cnt;i++){
+        node_entry_t *node = src[i];
+        if(node->directory == dir && node->node.type==0x0001){
+            dest[(*pos)++] = node;
+            sort_dir(src,dest,node,total_cnt,pos);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
+    node_entry_t **nodes = malloc(sizeof(*nodes));
+    int nodec = 0, pos = 0;
+    get_dir_contents_recursive("wadextract/content5",&nodes,&nodec,NULL,0);
+    node_entry_t **sorted = malloc(nodec * sizeof(*sorted));
+    sort_dir(nodes,sorted,NULL,nodec,&pos);
+    for(int i=0;i<nodec;i++){
+        printf("%s %d\n",sorted[i]->filename,i);
+    }
 	setbuf(stdout, NULL);
 
 	int opt;
 
 	char *action = NULL,
 		*channelid = NULL,
-		*channeltitle = NULL;
+		*channeltitle = NULL,
+        *patchfile = NULL;
 
 	while (1) {
 		int oi = 0;
 
-		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:vm:o:", cmdoptions, &oi);
+		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:vm:o:p:", cmdoptions, &oi);
 		if (opt == -1) break;
 		switch (opt) {
 		case 'a':
@@ -183,6 +250,9 @@ int main(int argc, char **argv) {
 			remap_dpad_right = 0;
 			remap_dpad_up = 0;
 			break;
+        case 'p':
+            patchfile = optarg;
+            break;
 		default:
 			break;
 		}
@@ -551,6 +621,7 @@ void do_extract() {
 			memcpy(string_table, data + curpos, rest_size);
 
 			u8_node *node;
+            int dir_depth = 0;
 			for (j = 0; j < nodec; j++) {
 				node = &nodes[j];
 				u32 doffset = be32((u8*)&node->data_offset);
@@ -558,16 +629,27 @@ void do_extract() {
 				u16 name_offset = be16((u8*)&node->name_offset);
 				u16 type = be16((u8*)&node->type);
 				char *name = (char*)&string_table[name_offset];
-				if (type == 0x00) {
+				if (type == 0x0000) { // Regular file 
 					if (verbose == 1) {
 						printf("Extracting and writing content5/%s.\r\n", name);
 					}
 					outfile = fopen(name, "wb");
 					fwrite(data + contentpos + doffset, 1, dsize, outfile);
 					fclose(outfile);
-				}
+				}else if(type==0x0100){ // Directory
+                    while(dir_depth>doffset){
+                        chdir("..");
+                        dir_depth--;
+                    }
+                    mkdir(name,0755);
+                    chdir(name);
+                    dir_depth++;
+                }
 			}
-			chdir("..");
+            do{
+			    chdir("..");
+                dir_depth--;
+            }while(dir_depth>0);
 			free(string_table);
 			free(nodes);
 		}
@@ -653,29 +735,51 @@ void do_pack(const char *titleid, const char *channelname) {
 	u32 footersize = 0x40;
 
 	// Build Content5 into a .app file first
-	DIR *dir;
-	struct dirent *ent;
 
 	u8 nodec = 0;
 
-	chdir("content5");
-	if (verbose == 1) {
-		printf("Generating content5 U8 Archive information\r\n");
-	}
-	if ((dir = opendir(".")) != NULL) {
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-				nodec++;
-			}
-		}
-		closedir(dir);
-	}
 
+    node_entry_t **dirnodes = malloc(sizeof(*dirnodes));
+    get_dir_contents_recursive("content5",&dirnodes,&nodec,NULL,0);
+    node_entry_t **sorted = malloc(sizeof(*sorted) * nodec);
+    int pos = 0;
+
+    sort_dir(dirnodes,sorted,NULL,nodec,&pos);
+    free(dirnodes);
+    u8 *string_table = malloc(100,1);
+    string_table[0] = 0x00;
+	string_table[1] = 0x2e;
+	string_table[2] = 0x00;
+    int npos = 3, slen = 100;
+    u8 *data = malloc(100,1);
+    
+    int dpos = 0;
+    for(int i=0;i<nodec;i++){
+        sorted[i]->node.name_offset = npos;
+        size_t nlen = strlen(sorted[i]->filename) + 1;
+        if(npos+nlen>slen){
+            char *new_table = realloc(string_table,(slen - (nlen+npos) + 100));
+            if(new_table!=NULL){
+                string_table = new_table;
+            }
+        }
+        memcpy(string_table,sorted[i]->filename,nlen);
+        spos+=nlen;
+        if(sorted[i]->node.type==0x0001){
+            chdir(sorted[i]->filename);
+        }else{
+            FILE *fle = fopen(sorted[i]->filename, "rb");
+            fread(data + dpos, 1, sorted[i]->node.size, fle);
+            fclose(fle);
+            sorted[i]->node.data_offset = dpos;
+            dpos += addpadding(sorted[i]->node.size, 32);
+        }
+    }
+{
+    /*
 	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
 
 	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
-	memset(string_table, 0, (nodec * 100 * sizeof(u8)));
 	string_table[0] = 0x00;
 	string_table[1] = 0x2e;
 	string_table[2] = 0x00;
@@ -692,7 +796,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	u16 noff = 3;
 	u32 doff = 0;
 	if ((dir = opendir(".")) != NULL) {
-		/* print all the files and directories within directory */
+		 
 		while ((ent = readdir(dir)) != NULL) {
 			stat(ent->d_name, &sbuffer);
 			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
@@ -757,14 +861,13 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	if (verbose == 1) {
 		printf("Exporting new U8 Archive to content5.app\r\n");
-	}
-
-
+    }*/
+}
 
 	u8_header header;
 	header.tag = 0x2D38AA55; // 0x55AA382D 
 	header.rootnode_offset = 0x20; // 0x00000020
-	header.header_size = k + ((nodec + 2) * sizeof(u8_node));
+	header.header_size = npos + ((nodec + 2) * sizeof(u8_node));
 	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
 	memset(header.padding, 0, 16);
 
@@ -788,7 +891,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
 
 	for (j = 1; j <= nodec; j++) {
-		node = &nodes[j];
+		u8_node node = sorted[]
 		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
 		node->size = REVERSEENDIAN32(node->size);
 		node->name_offset = REVERSEENDIAN16(node->name_offset);
