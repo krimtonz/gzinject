@@ -36,6 +36,10 @@ Prebuilt Windows executable is contained under releases (https://github.com/krim
           --disable-dpad-u-remapping               Disables dpad-up remapping
           --disable-dpad-l-remapping               Disables dpad-right remapping
           --disable-dpad-r-remapping               Disables dpad-left remapping
+      
+      --enable-stick-fix                      Enables fix for GC to N64 control stick mapping
+      --stick-deadzone size                   Sets the deadzone on the control stick to the supplied value (default: 0). --enable-stick-fix is required
+      --stick-bounds n[,n[,n,n]]              Sets the maximum control stick values (default: 106). n = all directions the same, n,n = horizontal and vertical separate, n,n,n,n = all directions separate. --enable-stick-fix is required
 
       -k, --key keyfile                       Uses the specified common key file
       --cleanup                               Cleans up the wad directory before extracting or after packing
