@@ -445,11 +445,14 @@ void do_extract() {
 	uint32_t certsize = be32(data + 0x08);
 	uint32_t tiksize = be32(data + 0x10);
 	uint32_t tmdsize = be32(data + 0x14);
+    uint32_t datasize = be32(data + 0x18);
+    uint32_t footersize = be32(data + 0x1C);
 
 	uint32_t certpos = 0x40;
 	uint32_t tikpos = 0x40 + addpadding(certsize, 64);
 	uint32_t tmdpos = tikpos + addpadding(tiksize, 64);
 	uint32_t datapos = tmdpos + addpadding(tmdsize, 64);
+    uint32_t footerpos = datapos + addpadding(datasize,64);
 
 	if (cleanup == 1) removedir(directory);
 
@@ -478,6 +481,13 @@ void do_extract() {
 	outfile = fopen("metadata.tmd", "wb");
 	fwrite(data + tmdpos, 1, tmdsize, outfile);
 	fclose(outfile);
+
+    if(verbose){
+        printf("Writing footer.bin\r\n");
+    }
+    outfile = fopen("footer.bin","wb");
+    fwrite(data + footerpos, 1, footersize, outfile);
+    fclose(outfile);
 
 	uint8_t encryptedkey[16], iv[16];
 
@@ -595,9 +605,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	if (verbose == 1) {
 		printf("Generating Footer signature\r\n");
 	}
-	uint8_t *footer = calloc(0x40, sizeof(uint8_t));
-	footer[0] = 0x47;
-	footer[1] = 0x5A;
+	char *footer = calloc(0x40, sizeof(uint8_t));
+	sprintf(footer,"gzinject v%s https://github.com/krimtonz/gzinject", GZINJECT_VERSION);
 	uint32_t footersize = 0x40;
 
 	// Build Content5 into a .app file first
