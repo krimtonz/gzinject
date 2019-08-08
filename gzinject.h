@@ -20,30 +20,6 @@ typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long long u64;
 
-typedef struct {
-	u16 type;
-	u16 name_offset;
-	u32 data_offset;
-	u32 size;
-}u8_node;
-
-typedef struct
-{
-	u32 tag;
-	u32 rootnode_offset;
-	u32 header_size;
-	u32 data_offset;
-	u8 padding[16];
-} u8_header;
-
-typedef struct node_entry_s node_entry_t;
-
-struct node_entry_s {
-    u8_node node;
-    char *filename;
-    node_entry_t *directory;
-};
-
 u16 be16(const u8 *p);
 u32 be32(const u8 *p);
 

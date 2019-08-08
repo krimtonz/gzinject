@@ -15,13 +15,13 @@
 #include "sha1.h"
 #include "md5.h"
 #endif
+#include "lz77.h"
+#include "u8.h"
+#include "gzi.h"
 
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)
 #define getcwd(X,Y) _getcwd(X,Y)
-#define PATH_SEPARATOR '\\'
-#else
-#define PATH_SEPARATOR '/'
 #endif
 
 unsigned char key[16];
@@ -30,7 +30,7 @@ u8 region = 0x03;
 int cleanup = 0, verbose = 0, raphnet = 0,
 	remap_cstick_down = 1, remap_dpad_up = 1, remap_dpad_down = 1, remap_dpad_right = 1, remap_dpad_left = 1;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
-	*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
+	*workingdirectory = NULL, *rom = NULL, *outwad = NULL, *patch = NULL;
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -126,77 +126,15 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 }
 #endif
 
-void get_dir_contents_recursive(const char *dirname, node_entry_t ***nodes, u8 *idx, node_entry_t *directory, int recursion){
-    struct stat sbuffer;
-    node_entry_t **node_array = *nodes;
-    DIR *dir;
-	struct dirent *ent;
-    chdir(dirname);
-	if ((dir = opendir(".")) != NULL) {
-		while ((ent = readdir(dir)) != NULL) {
-            if(ent->d_name[0]=='.') continue;
-            u8 this_idx = *idx;
-            node_entry_t **new_nodes = realloc(node_array, ((this_idx+1) * sizeof(*node_array)));
-            node_array = new_nodes;
-            size_t len = strlen(ent->d_name);
-            char *name = malloc(strlen(ent->d_name) + 1);
-            strcpy(name,ent->d_name);
-            name[len] = 0;
-            node_entry_t *node = malloc(sizeof(node_entry_t));
-            node->filename = name;
-            node->directory = directory;
-            node->node.size = sbuffer.st_size;
-            stat(name, &sbuffer);
-            (*idx)++;
-			if ((sbuffer.st_mode & S_IFMT) == S_IFDIR) {
-                node->node.type = 0x0001;
-                node->node.size = recursion;
-                get_dir_contents_recursive(name,&node_array,idx,node,recursion+1);    
-                
-			}else{
-                node->node.type = 0x0000;
-            }
-            node_array[this_idx] = node;
-		}
-		closedir(dir);
-	}
-    chdir("..");
-    *nodes = node_array;
-}
-
-void sort_dir(node_entry_t **src, node_entry_t **dest, node_entry_t *dir, size_t total_cnt, int *pos){
-    for(int i=0;i<total_cnt;i++){
-        node_entry_t *node = src[i];
-        if(node->directory == dir && node->node.type==0x0000){
-            dest[(*pos)++] = node;
-        }
-    }
-    for(int i=0;i<total_cnt;i++){
-        node_entry_t *node = src[i];
-        if(node->directory == dir && node->node.type==0x0001){
-            dest[(*pos)++] = node;
-            sort_dir(src,dest,node,total_cnt,pos);
-        }
-    }
-}
-
 int main(int argc, char **argv) {
-    node_entry_t **nodes = malloc(sizeof(*nodes));
-    int nodec = 0, pos = 0;
-    get_dir_contents_recursive("wadextract/content5",&nodes,&nodec,NULL,0);
-    node_entry_t **sorted = malloc(nodec * sizeof(*sorted));
-    sort_dir(nodes,sorted,NULL,nodec,&pos);
-    for(int i=0;i<nodec;i++){
-        printf("%s %d\n",sorted[i]->filename,i);
-    }
+
 	setbuf(stdout, NULL);
 
 	int opt;
 
 	char *action = NULL,
 		*channelid = NULL,
-		*channeltitle = NULL,
-        *patchfile = NULL;
+		*channeltitle = NULL;
 
 	while (1) {
 		int oi = 0;
@@ -251,7 +189,7 @@ int main(int argc, char **argv) {
 			remap_dpad_up = 0;
 			break;
         case 'p':
-            patchfile = optarg;
+            patch = optarg;
             break;
 		default:
 			break;
@@ -384,6 +322,11 @@ u32 getcontentlength(u8 *tmd, unsigned int contentnum) {
 		tmd[off + 7];
 }
 
+void setcontentlength(u8 *tmd, unsigned int contentnum, unsigned int size){
+    u32 off = 0x1ec + (36 * contentnum);
+	*((uint32_t*)tmd + off) = REVERSEENDIAN32(size);
+}
+
 u16 be16(const u8 *p)
 {
 	return (p[0] << 8) | p[1];
@@ -510,25 +453,6 @@ void do_extract() {
 	u32 tmdpos = tikpos + addpadding(tiksize, 64);
 	u32 datapos = tmdpos + addpadding(tmdsize, 64);
 
-	char* titleid = calloc(5, sizeof(u8));
-	memcpy(titleid, &data[tmdpos + 0x190], 4);
-
-	if (strcmp(titleid, "NACJ") != 0 && strcmp(titleid, "NACE") != 0 && strcmp(titleid, "NGZE") != 0 && strcmp(titleid, "NGZJ")) {
-		printf("%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
-		char ans;
-		scanf("%c", &ans);
-		while (ans != 'y' && ans != 'n') {
-			printf("\r\n%s does not appear to be an OOT or GZ WAD (Channel ID: %s, expecting NACJ, NACE, NGZE, or NGZJ), would you like to continue? (y/n) ", wad, titleid);
-			scanf("%c", &ans);
-		}
-		printf("\r\n");
-		if (ans == 'n') {
-			free(data);
-			return;
-		}
-	}
-	free(titleid);
-
 	if (cleanup == 1) removedir(directory);
 
 	mkdir(directory, 0755);
@@ -594,64 +518,8 @@ void do_extract() {
 			if (verbose == 1) {
 				printf("Extracting content 5 U8 Archive.\r\n");
 			}
-			mkdir("content5", 0755);
-			chdir("content5");
-			u8_header header;
-			u32 data_offset;
-			u8 *string_table;
-			size_t rest_size;
 
-			memcpy(&header, data + contentpos, sizeof(header));
-
-			int curpos = contentpos + sizeof(header);
-
-			u8_node root_node;
-			memcpy(&root_node, data + curpos, sizeof(u8_node));
-			curpos += sizeof(u8_node);
-
-			u32 nodec = be32((u8*)&root_node.size) - 1;
-
-			u8_node *nodes = malloc(sizeof(u8_node)*nodec);
-			memcpy(nodes, data + curpos, sizeof(u8_node)*nodec);
-			curpos += sizeof(u8_node)*nodec;
-
-			data_offset = be32((u8*)&header.data_offset);
-			rest_size = data_offset - sizeof(header) - (nodec + 1) * sizeof(u8_node);
-			string_table = malloc(rest_size);
-			memcpy(string_table, data + curpos, rest_size);
-
-			u8_node *node;
-            int dir_depth = 0;
-			for (j = 0; j < nodec; j++) {
-				node = &nodes[j];
-				u32 doffset = be32((u8*)&node->data_offset);
-				u32 dsize = be32((u8*)&node->size);
-				u16 name_offset = be16((u8*)&node->name_offset);
-				u16 type = be16((u8*)&node->type);
-				char *name = (char*)&string_table[name_offset];
-				if (type == 0x0000) { // Regular file 
-					if (verbose == 1) {
-						printf("Extracting and writing content5/%s.\r\n", name);
-					}
-					outfile = fopen(name, "wb");
-					fwrite(data + contentpos + doffset, 1, dsize, outfile);
-					fclose(outfile);
-				}else if(type==0x0100){ // Directory
-                    while(dir_depth>doffset){
-                        chdir("..");
-                        dir_depth--;
-                    }
-                    mkdir(name,0755);
-                    chdir(name);
-                    dir_depth++;
-                }
-			}
-            do{
-			    chdir("..");
-                dir_depth--;
-            }while(dir_depth>0);
-			free(string_table);
-			free(nodes);
+			extract_u8_archive(data + contentpos,"content5");
 		}
 
 		char *contentname = malloc(100);
@@ -727,7 +595,7 @@ void do_pack(const char *titleid, const char *channelname) {
 	fclose(infile);
 
 	if (verbose == 1) {
-		printf("Generating Fooder signature\r\n");
+		printf("Generating Footer signature\r\n");
 	}
 	u8 *footer = calloc(0x40, sizeof(u8));
 	footer[0] = 0x47;
@@ -736,190 +604,52 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	// Build Content5 into a .app file first
 
-	u8 nodec = 0;
-
-
-    node_entry_t **dirnodes = malloc(sizeof(*dirnodes));
-    get_dir_contents_recursive("content5",&dirnodes,&nodec,NULL,0);
-    node_entry_t **sorted = malloc(sizeof(*sorted) * nodec);
-    int pos = 0;
-
-    sort_dir(dirnodes,sorted,NULL,nodec,&pos);
-    free(dirnodes);
-    u8 *string_table = malloc(100,1);
-    string_table[0] = 0x00;
-	string_table[1] = 0x2e;
-	string_table[2] = 0x00;
-    int npos = 3, slen = 100;
-    u8 *data = malloc(100,1);
+    int content5len = create_u8_archive("content5","content5.app");
     
-    int dpos = 0;
-    for(int i=0;i<nodec;i++){
-        sorted[i]->node.name_offset = npos;
-        size_t nlen = strlen(sorted[i]->filename) + 1;
-        if(npos+nlen>slen){
-            char *new_table = realloc(string_table,(slen - (nlen+npos) + 100));
-            if(new_table!=NULL){
-                string_table = new_table;
-            }
-        }
-        memcpy(string_table,sorted[i]->filename,nlen);
-        spos+=nlen;
-        if(sorted[i]->node.type==0x0001){
-            chdir(sorted[i]->filename);
-        }else{
-            FILE *fle = fopen(sorted[i]->filename, "rb");
-            fread(data + dpos, 1, sorted[i]->node.size, fle);
-            fclose(fle);
-            sorted[i]->node.data_offset = dpos;
-            dpos += addpadding(sorted[i]->node.size, 32);
-        }
-    }
-{
-    /*
-	u8_node *nodes = calloc((nodec + 1), sizeof(u8_node));
-
-	u8 *string_table = calloc(nodec * 100, sizeof(u8)); // Assume max 100 char per filename
-	string_table[0] = 0x00;
-	string_table[1] = 0x2e;
-	string_table[2] = 0x00;
-	u16 j = 1;
-
-	// Root Directory node. 
-	u8_node *node = &nodes[0];
-	node->data_offset = 0x00;
-	node->name_offset = 0x0100;
-	node->data_offset = 0x00;
-	node->size = 0x61000000;
-	node->type = 0x0001;
-
-	u16 noff = 3;
-	u32 doff = 0;
-	if ((dir = opendir(".")) != NULL) {
-		 
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-
-				node = &nodes[j];
-				node->type = 0x0000;
-				node->name_offset = noff;
-
-				size_t nlen = strlen(ent->d_name) + 1;
-				memcpy(string_table + noff, ent->d_name, nlen);
-				noff += nlen;
-
-				stat(ent->d_name, &sbuffer);
-
-				node->data_offset = doff;
-				node->size = sbuffer.st_size;
-
-				doff += addpadding(sbuffer.st_size, 32);
-
-				j++;
-			}
-		}
-		closedir(dir);
-	}
-	u16 k;
-	u8 prevchar = 1;
-	for (k = 0; k < nodec * 100; k++) {
-		if (prevchar == 0 && string_table[k] == 0) {
-			break;
-		}
-		prevchar = string_table[k];
-	}
-
-
-
-	u8 *data = calloc(doff, sizeof(u8));
-	u32 curpos = 0;
-
-	if (verbose == 1) {
-		printf("Reading U8 Archive Files\r\n");
-	}
-	if ((dir = opendir(".")) != NULL) {
-		while ((ent = readdir(dir)) != NULL) {
-			stat(ent->d_name, &sbuffer);
-			if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
-				if (verbose == 1) {
-					printf("Reading wadextract/content5/%s\r\n", ent->d_name);
-				}
-				stat(ent->d_name, &sbuffer);
-				FILE *fle = fopen(ent->d_name, "rb");
-				fread(data + curpos, 1, sbuffer.st_size, fle);
-				fclose(fle);
-				curpos += addpadding(sbuffer.st_size, 32);
-
-			}
-		}
-		closedir(dir);
-	}
-
-
-	chdir("..");
-
-	if (verbose == 1) {
-		printf("Exporting new U8 Archive to content5.app\r\n");
-    }*/
-}
-
-	u8_header header;
-	header.tag = 0x2D38AA55; // 0x55AA382D 
-	header.rootnode_offset = 0x20; // 0x00000020
-	header.header_size = npos + ((nodec + 2) * sizeof(u8_node));
-	header.data_offset = addpadding(header.rootnode_offset + header.header_size, 0x20);
-	memset(header.padding, 0, 16);
-
-	u32 dataoffset = header.data_offset;
-	u16 padcount = header.data_offset - (header.header_size + header.rootnode_offset);
-
-
-	FILE *foutfile = fopen("content5.app", "wb");
-
-	header.header_size = REVERSEENDIAN32(header.header_size);
-	header.data_offset = REVERSEENDIAN32(header.data_offset);
-	header.rootnode_offset = REVERSEENDIAN32(header.rootnode_offset);
-	fwrite(&header, 1, sizeof(u8_header), foutfile);
-
-	u8_node rootnode;
-	rootnode.name_offset = 0x00;
-	rootnode.data_offset = 0x00;
-	rootnode.size = nodec + 2;
-	rootnode.type = 0x0001;
-	rootnode.size = REVERSEENDIAN32(rootnode.size);
-	fwrite(&rootnode, 1, sizeof(u8_node), foutfile);
-
-	for (j = 1; j <= nodec; j++) {
-		u8_node node = sorted[]
-		node->data_offset = REVERSEENDIAN32(node->data_offset + dataoffset);
-		node->size = REVERSEENDIAN32(node->size);
-		node->name_offset = REVERSEENDIAN16(node->name_offset);
-	}
-	fwrite(nodes, 1, sizeof(u8_node) * (nodec + 1), foutfile);
-	free(nodes);
-
-	fwrite(string_table, 1, k, foutfile);
-	free(string_table);
-
-	u8 *padding = calloc(padcount, sizeof(u8));
-	fwrite(padding, 1, padcount, foutfile);
-	free(padding);
-
-	fwrite(data, 1, doff, foutfile);
-	free(data);
-
-	fclose(foutfile);
+    setcontentlength(tmd,5,content5len);
 
 	if (verbose == 1) {
 		printf("Modifying content metadata in the TMD\r\n");
 	}
 	u16 contentsc = be16(tmd + 0x1DE);
-	int i;
+	int i;    
 
 	u32 paddedsize = 0;
 	char *cfname = malloc(20);
-	for (i = 0; i < contentsc; i++) {
+    
+	if(patch){
+		uint8_t **fileptrs = malloc(sizeof(*fileptrs) * contentsc);
+		uint32_t *filesizes = malloc(sizeof(*filesizes) * contentsc);
+		FILE *contentfile;
+		for (i = 0; i < contentsc; i++) {
+			snprintf(cfname, 20, "content%d.app", i);
+			stat(cfname, &sbuffer);
+			fileptrs[i] = malloc(sbuffer.st_size);
+			filesizes[i] = sbuffer.st_size;
+			contentfile = fopen(cfname,"rb");
+			fread(fileptrs[i],1,sbuffer.st_size,contentfile);
+			fclose(contentfile);
+		};
+		
+		gzi_ctxt_t gzi;
+		gzi_init(&gzi,fileptrs,filesizes,contentsc);
+		gzi_parse_file(&gzi,patch);
+		gzi_run(&gzi);
+
+		for(int i=0;i<contentsc;i++){
+			snprintf(cfname, 20, "content%d.app", i);
+			contentfile = fopen(cfname,"wb");
+			fwrite(gzi.file_ptrs[i],1,gzi.file_sizes[i],contentfile);
+			fclose(contentfile);
+			setcontentlength(tmd,i,gzi.file_sizes[i]);
+		}
+
+		gzi_destroy(&gzi);
+		free(fileptrs);
+		free(filesizes);
+	}
+
+    for (i = 0; i < contentsc; i++) {
 		snprintf(cfname, 20, "content%d.app", i);
 		stat(cfname, &sbuffer);
 		datasize += addpadding(sbuffer.st_size, 64);
@@ -965,6 +695,8 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	do_decrypt(newenc, 16, key, iv);
 
+    int j;
+
 	for (j = 2; j < 15; j++) {
 		iv[j] = 0x00;
 	}
@@ -982,7 +714,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		FILE *cfile = fopen(cfname, "rb");
 		fread(contents + contentpos, 1, size, cfile);
 		fclose(cfile);
-
+        
 		if (i == 0) {
 			if (channelname != NULL) {
 				if (verbose == 1) {
@@ -1050,13 +782,10 @@ void do_pack(const char *titleid, const char *channelname) {
 				contents[contentpos + 0x630 + j] = md5digest[j];
 			}
 		}
-
+        
 		if (i == 1) {
-			if (verbose == 1) {
-				printf("Applying GZ Fixes\r\n\tMemory\r\n");
-			}
 
-
+/*
 			// Memory fix 
 			contents[contentpos + 0x2EB0] = 0x60;
 			contents[contentpos + 0x2EB1] = 0x00;
@@ -1108,9 +837,8 @@ void do_pack(const char *titleid, const char *channelname) {
 					contents[contentpos + 0x16BB05] = 0x20;
 				}
 
-			}
+			}*/
 		}
-
 		iv[0] = tmd[0x1e8 + (0x24 * i)];
 		iv[1] = tmd[0x1e9 + (0x24 * i)];
 

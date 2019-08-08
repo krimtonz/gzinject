@@ -277,3 +277,4 @@ config.*
 wad.h
 gzinject
 *.zip
+*.gzi
