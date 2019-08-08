@@ -52,13 +52,15 @@ int lz77_decompress(uint8_t *src, uint8_t *dest){
         return -1;
     }
     int index1 = 0;
-    int num1 = *src++ + (*src++ << 8) + (*src++<<16);
+    int num1 = src[0] + (src[1] << 8) + (src[2]<<16);
+    src+=3;
     while(index1<num1){
         uint8_t num2 = *src++;
         for(int index2=0;index2<8;++index2){
             if((num2 & 0x80)!=0){
                 int num3 = 3 + (*src>>4);
-                int num4 = 1 + ((*src++ & 0xF) << 8) + *src++;
+                int num4 = 1 + ((src[0] & 0xF) << 8) + src[1];
+                src+=2;
                 if(num4>num1){
                     return -1;
                 }
@@ -80,7 +82,7 @@ int lz77_decompress(uint8_t *src, uint8_t *dest){
     return 0;
 }
 
-void lz77_search(uint8_t *source, int *dest, int pos, int len){
+void lz77_search(uint8_t *source, int *dest, int *d, int pos, int len){
     
     if(pos>=len){
         dest[0] = -1;
@@ -92,7 +94,7 @@ void lz77_search(uint8_t *source, int *dest, int pos, int len){
         dest[1] = 0;
         return;
     }
-    int *d = malloc(0x1000 * sizeof(int));
+    
     int didx = 0;
     for(int index = 1; index<0x1000 && index<pos;++index){
         if(source[pos - (index+1)] == source[pos]){
@@ -102,7 +104,6 @@ void lz77_search(uint8_t *source, int *dest, int pos, int len){
     if(didx==0){
         dest[0] = 0;
         dest[1] = 0;
-        free(d);
         return;
     }
     int num =0;
@@ -122,10 +123,9 @@ void lz77_search(uint8_t *source, int *dest, int pos, int len){
     }
     dest[0] = num;
     dest[1] = d[0];
-    free(d);
 }
 
-int lz77_compress(uint8_t *src, uint8_t **dest, int len, int *lenp){
+int lz77_compress(uint8_t *src, uint8_t **dest, uint32_t len, uint32_t *lenp){
     int pos = 0;
     int cpos = 0;
     uint8_t *comp = calloc(len,1);
@@ -135,20 +135,21 @@ int lz77_compress(uint8_t *src, uint8_t **dest, int len, int *lenp){
         comp[cpos++]=*(uint8_t*)cp++;
     }
     int d[2];
+    int *dbuf = malloc(0x1000 * sizeof(int));
     while(pos<len){
         uint8_t num1 = 0;
-        uint8_t *comp2 = calloc(len,1);
+        uint8_t comp2[16];
         int bpos = 0;
         
         for(int index=0;index<8;++index){
-            lz77_search(src,d,pos,len);
+            lz77_search(src,d,dbuf,pos,len);
             if(d[0] > 2){
-                uint8_t num2 = (((d[0] - 3 & 0xF) << 4) + (d[1] - 1 >> 8 & 0xF));
+                uint8_t num2 = ((((d[0] - 3) & 0xF) << 4) + ((d[1] - 1) >> 8 & 0xF));
                 comp2[bpos++] = num2;
                 uint8_t num3 = (d[1] - 1) & 0xFF;
                 comp2[bpos++] = num3;
                 pos+=d[0];
-                num1 |= 1 << 8 - (index+1);
+                num1 |= 1 << (8 - (index+1));
             }else if(d[0]>=0){
                 comp2[bpos++] = src[pos++];
             }else{
@@ -159,7 +160,6 @@ int lz77_compress(uint8_t *src, uint8_t **dest, int len, int *lenp){
         for(int i=0;i<bpos;i++){
             comp[cpos++] = comp2[i];
         }
-        free(comp2);
     }
     while(cpos%4!=0){
         comp[cpos++] = 0;
@@ -168,6 +168,7 @@ int lz77_compress(uint8_t *src, uint8_t **dest, int len, int *lenp){
     *dest = malloc(cpos);
     memcpy(*dest,comp,cpos);
     free(comp);
+    free(dbuf);
     return cpos;
 }
 

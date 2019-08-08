@@ -15,17 +15,12 @@ typedef enum{
     FILE_NORMAL
 }filetype_t;
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned int u32;
-typedef unsigned long long u64;
+uint16_t be16(const uint8_t *p);
+uint32_t be32(const uint8_t *p);
 
-u16 be16(const u8 *p);
-u32 be32(const u8 *p);
-
-u32 getcontentlength(u8 *, unsigned int);
-u32 addpadding(unsigned int, unsigned int);
-void truchasign(u8 *, u8, size_t);
+uint32_t getcontentlength(uint8_t *, unsigned int);
+uint32_t addpadding(unsigned int, unsigned int);
+void truchasign(uint8_t *, uint8_t, size_t);
 void removefile(const char *);
 void removedir(const char *);
 char *removeext(char *);

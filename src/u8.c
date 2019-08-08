@@ -7,6 +7,15 @@
 #include <getopt.h>
 #include "u8.h"
 
+void free_nodes(node_entry_t **nodes, uint8_t nodec){
+    for(int i=0;i<nodec;i++){
+        if(nodes[i]){
+            if(nodes[i]->filename) free(nodes[i]->filename);
+            free(nodes[i]);
+        }
+    }
+}
+
 void get_dir_contents_recursive(const char *dirname, node_entry_t ***nodes, uint8_t *idx, node_entry_t *directory, int recursion){
     struct stat sbuffer;
     node_entry_t **node_array = *nodes;
@@ -97,7 +106,7 @@ int create_u8_archive(const char *dir, const char *output){
     for(int i=0;i<nodec;i++){
         sorted[i]->node.name_offset = npos;
         size_t nlen = strlen(sorted[i]->filename) + 1;
-        char *new_table = realloc(string_table,npos + nlen);
+        uint8_t *new_table = realloc(string_table,npos + nlen);
         if(new_table!=NULL){
             string_table = new_table;
         }
@@ -109,16 +118,17 @@ int create_u8_archive(const char *dir, const char *output){
             chdir(sorted[i]->filename);
             dirdepth++;
         }else{
-            char *new_data = realloc(data,dpos + sorted[i]->node.size);
+            uint32_t padlen = addpadding(sorted[i]->node.size,32);
+            uint8_t *new_data = realloc(data,dpos + padlen);
             if(new_data!=NULL){
                 data = new_data;
             }
-
+            memset(data + dpos,0,padlen);
             FILE *fle = fopen(sorted[i]->filename, "rb");
             fread(data + dpos, 1, sorted[i]->node.size, fle);
             fclose(fle);
             sorted[i]->node.data_offset = dpos;
-            dpos += addpadding(sorted[i]->node.size, 32);
+            dpos+=padlen;
         }
     }
     
@@ -161,7 +171,8 @@ int create_u8_archive(const char *dir, const char *output){
 		node.name_offset = REVERSEENDIAN16(node.name_offset);
         fwrite(&node, 1, sizeof(u8_node), foutfile);
 	}
-
+    free_nodes(sorted + 1,nodec - 1);
+    free(sorted);
 	fwrite(string_table, 1, npos, foutfile);
 	free(string_table);
 
@@ -177,6 +188,7 @@ int create_u8_archive(const char *dir, const char *output){
 
     struct stat sbuffer;
     stat("content5.app",&sbuffer);
+    return sbuffer.st_size;
 }
 
 void extract_u8_archive(uint8_t *data, const char *outdir){

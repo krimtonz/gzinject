@@ -274,7 +274,5 @@ wadextract/
 *.o
 Makefile
 config.*
-wad.h
 gzinject
 *.zip
-*.gzi

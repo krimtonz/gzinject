@@ -5,7 +5,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <getopt.h>
-#include "gzinject.h"
+
 #ifdef _USE_LIBCRYPTO
 #include <openssl/evp.h>
 #include <openssl/md5.h>
@@ -15,6 +15,8 @@
 #include "sha1.h"
 #include "md5.h"
 #endif
+
+#include "gzinject.h"
 #include "lz77.h"
 #include "u8.h"
 #include "gzi.h"
@@ -24,15 +26,21 @@
 #define getcwd(X,Y) _getcwd(X,Y)
 #endif
 
-unsigned char key[16];
-u8 region = 0x03;
+static uint8_t key[16] = {0};
+static uint8_t region = 0x03;
 
-int cleanup = 0, verbose = 0, raphnet = 0,
-	remap_cstick_down = 1, remap_dpad_up = 1, remap_dpad_down = 1, remap_dpad_right = 1, remap_dpad_left = 1;
-char *wad = NULL, *directory = NULL, *keyfile = NULL,
-	*workingdirectory = NULL, *rom = NULL, *outwad = NULL, *patch = NULL;
+static int cleanup = 0;
+static int verbose = 0;
 
-static struct option cmdoptions[] = {
+static char *wad = NULL;
+static char *directory = NULL;
+static char *keyfile = NULL;
+static char	*workingdirectory = NULL;
+static char *rom = NULL; 
+static char *outwad = NULL;
+static char *patch = NULL;
+
+static const struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
 	{ "wad",required_argument,0,'w' },
 	{ "channelid",required_argument,0,'i' },
@@ -43,27 +51,20 @@ static struct option cmdoptions[] = {
 	{ "verbose",no_argument,&verbose,1 },
 	{ "directory",required_argument,0,'d' },
 	{ "cleanup", no_argument,&cleanup,1},
-	{"version",no_argument,0,'v'},
-	{"raphnet",no_argument,&raphnet,1},
-	{"disable-controller-remappings",no_argument,0,'z'},
-	{ "disable-cstick-d-remapping",no_argument,&remap_cstick_down,0},
-	{"disable-dpad-u-remapping",no_argument,&remap_dpad_up,0},
-	{ "disable-dpad-d-remapping",no_argument,&remap_dpad_down,0},
-	{ "disable-dpad-r-remapping",no_argument,&remap_dpad_right,0},
-	{ "disable-dpad-l-remapping",no_argument,&remap_dpad_left,0},
-	{"rom",required_argument,0,'m'},
-	{"outputwad",required_argument,0,'o'},
-    {"patch-file",required_argument,0,'p'},
-	{0,0,0,0}
+	{ "version",no_argument,0,'v'},
+	{ "rom",required_argument,0,'m'},
+	{ "outputwad",required_argument,0,'o'},
+    { "patch-file",required_argument,0,'p'},
+	{ 0,0,0,0}
 };
 
-unsigned char newkey[16] = {
-	0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
+const uint8_t newkey[16] = {
+	0x47, 0x5A, 0x53, 0x54, 0x41, 0x4E, 0x44, 0x53, 0x46, 0x4F, 0x52, 0x47, 0x5A, 0x21, 0x21, 0x21
 };
 
 #ifdef _USE_LIBCRYPTO
-inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
-	u8 *encrypted = malloc(size * 2);
+inline void do_encrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+	uint8_t *encrypted = malloc(size * 2);
 	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 	int len;
 	EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
@@ -74,8 +75,8 @@ inline void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
 	free(encrypted);
 }
 
-inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
-	u8 *decrypted = malloc(size);
+inline void do_decrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+	uint8_t *decrypted = malloc(size);
 	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 	int len;
 	EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
@@ -86,30 +87,30 @@ inline void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
 	free(decrypted);
 }
 
-inline void do_sha1(u8 *input, u8 *output, size_t size) {
+inline void do_sha1(uint8_t *input, uint8_t *output, size_t size) {
 	SHA1(input, size, output);
 }
 
-inline void do_md5(u8 *input, u8 *output, size_t size) {
+inline void do_md5(uint8_t *input, uint8_t *output, size_t size) {
 	MD5(input, size, output);
 }
 #else
 
- void do_encrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+ void do_encrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
 	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 	AES_init_ctx_iv(aes, key, iv);
 	AES_CBC_encrypt_buffer(aes, input, size);
 	free(aes);
 }
 
- void do_decrypt(u8 *input, size_t size, u8 *key, u8* iv) {
+ void do_decrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
 	struct AES_ctx *aes = (struct AES_ctx*)malloc(sizeof(struct AES_ctx));
 	AES_init_ctx_iv(aes, key, iv);
 	AES_CBC_decrypt_buffer(aes, input, size);
 	free(aes);
 }
 
- void do_sha1(u8 *input, u8 *output, size_t size) {
+ void do_sha1(uint8_t *input, uint8_t *output, size_t size) {
 	SHA1_CTX *sha1 = malloc(sizeof(SHA1_CTX));
 	SHA1Init(sha1);
 	SHA1Update(sha1, input, size);
@@ -117,7 +118,7 @@ inline void do_md5(u8 *input, u8 *output, size_t size) {
 	free(sha1);
 }
 
- void do_md5(u8 *input, u8 *output, size_t size) {
+ void do_md5(uint8_t *input, uint8_t *output, size_t size) {
 	MD5_CTX *md5 = malloc(sizeof(MD5_CTX));
 	MD5_Init(md5);
 	MD5_Update(md5, input, size);
@@ -132,9 +133,9 @@ int main(int argc, char **argv) {
 
 	int opt;
 
-	char *action = NULL,
-		*channelid = NULL,
-		*channeltitle = NULL;
+	char *action = NULL;
+	char *channelid = NULL;
+    char *channeltitle = NULL;
 
 	while (1) {
 		int oi = 0;
@@ -181,13 +182,6 @@ int main(int argc, char **argv) {
 		case 'o':
 			outwad = optarg;
 			break;
-		case 'z':
-			remap_cstick_down = 0;
-			remap_dpad_down = 0;
-			remap_dpad_left = 0;
-			remap_dpad_right = 0;
-			remap_dpad_up = 0;
-			break;
         case 'p':
             patch = optarg;
             break;
@@ -202,18 +196,15 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
-	if (strcmp(action, "genkey") == 0) {
-
+	if (strcmp(action, "genkey") == 0){
 		genkey();
 		return 0;
 	}
 
 	if (strcmp(action, "extract") != 0 && strcmp(action, "pack") != 0 && strcmp(action, "inject") != 0) {
-
 		print_usage();
 		exit(0);
 	}
-
 
 	if (wad == NULL) {
 		print_usage();
@@ -243,7 +234,16 @@ int main(int argc, char **argv) {
 	}
 
 	FILE *fkeyfile = fopen(keyfile, "rb");
+    if(!fkeyfile){
+        perror("Could not open keyfile");
+        exit(1);
+    }
+
 	fread(&key, 1, 16, fkeyfile);
+    if(ferror(fkeyfile)){
+        perror("Could not read from keyfile.");
+        exit(1);
+    }
 	fclose(fkeyfile);
 
 	workingdirectory = malloc(200);
@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
 		fseek(from, 0, SEEK_END);
 		size_t fromlen = ftell(from);
 		fseek(from, 0, SEEK_SET);
-		u8 *inrom = malloc(fromlen);
+		uint8_t *inrom = malloc(fromlen);
 		fread(inrom, 1, fromlen, from);
 		fclose(from);
 
@@ -301,12 +301,10 @@ int main(int argc, char **argv) {
 	}
 
 	free(workingdirectory);
-
-
 	return 0;
 }
 
-u32 addpadding(unsigned int inp, unsigned int padding) {
+uint32_t addpadding(uint32_t inp, uint32_t padding) {
 	int ret = inp;
 	if (inp % padding != 0) {
 		ret = inp + (padding - (inp % padding));
@@ -314,25 +312,25 @@ u32 addpadding(unsigned int inp, unsigned int padding) {
 	return ret;
 }
 
-u32 getcontentlength(u8 *tmd, unsigned int contentnum) {
-	u32 off = 0x1ec + (36 * contentnum);
+uint32_t getcontentlength(uint8_t *tmd, uint32_t contentnum) {
+	uint32_t off = 0x1ec + (36 * contentnum);
 	return tmd[off + 4] << 24 |
 		tmd[off + 5] << 16 |
 		tmd[off + 6] << 8 |
 		tmd[off + 7];
 }
 
-void setcontentlength(u8 *tmd, unsigned int contentnum, unsigned int size){
-    u32 off = 0x1ec + (36 * contentnum);
-	*((uint32_t*)tmd + off) = REVERSEENDIAN32(size);
+void setcontentlength(uint8_t *tmd, uint32_t contentnum, uint32_t size){
+    uint32_t off = 0x1ec + (36 * contentnum) + 4;
+	*((uint32_t*)(tmd + off)) = REVERSEENDIAN32(size);
 }
 
-u16 be16(const u8 *p)
+uint16_t be16(const uint8_t *p)
 {
 	return (p[0] << 8) | p[1];
 }
 
-u32 be32(const u8 *p)
+uint32_t be32(const uint8_t *p)
 {
 	return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
 }
@@ -348,25 +346,25 @@ void print_version(const char* prog) {
 	printf("\r\n");
 }
 
-void truchasign(u8 *data, u8 type, size_t len) {
-	u16 pos = 0x1f2;
+void truchasign(uint8_t *data, uint8_t type, size_t len) {
+	uint16_t pos = 0x1f2;
 	if (type == W_TMD) {
 		pos = 0x1d4;
 	}
 
-	u8 digest[20];
-	do_sha1(data + pos + 0x140, digest, len - 0x140);
+	uint8_t digest[20];
+	do_sha1(data + 0x140, digest, len - 0x140);
 
-	u16 i;
+	uint16_t i;
 	if (digest[0] != 0x00) {
 		for (i = 4; i < 260; i++) {
 			data[i] = 0x00;
 		}
 		for (i = 0; i < 0xFFFF; i++) {
-			u16 revi = REVERSEENDIAN16(i);
+			uint16_t revi = REVERSEENDIAN16(i);
 			memcpy(data + pos, &revi, 2);
 
-			do_sha1(data + pos + 0x140, digest, len - 0x140);
+			do_sha1(data + 0x140, digest, len - 0x140);
 
 			if (digest[0] == 0x00) {
 				break;
@@ -426,7 +424,7 @@ void do_extract() {
 	fseek(wadfile, 0, SEEK_END);
 	size_t wadsize = ftell(wadfile);
 	fseek(wadfile, 0, SEEK_SET);
-	u8 *data = (u8*)malloc(wadsize);
+	uint8_t *data = (uint8_t*)malloc(wadsize);
 	fread(data, 1, wadsize, wadfile);
 	fclose(wadfile);
 	if (be32(&data[3]) != 0x20497300) {
@@ -444,21 +442,21 @@ void do_extract() {
 		}
 	}
 
-	u32 certsize = be32(data + 0x08);
-	u32 tiksize = be32(data + 0x10);
-	u32 tmdsize = be32(data + 0x14);
+	uint32_t certsize = be32(data + 0x08);
+	uint32_t tiksize = be32(data + 0x10);
+	uint32_t tmdsize = be32(data + 0x14);
 
-	u32 certpos = 0x40;
-	u32 tikpos = 0x40 + addpadding(certsize, 64);
-	u32 tmdpos = tikpos + addpadding(tiksize, 64);
-	u32 datapos = tmdpos + addpadding(tmdsize, 64);
+	uint32_t certpos = 0x40;
+	uint32_t tikpos = 0x40 + addpadding(certsize, 64);
+	uint32_t tmdpos = tikpos + addpadding(tiksize, 64);
+	uint32_t datapos = tmdpos + addpadding(tmdsize, 64);
 
 	if (cleanup == 1) removedir(directory);
 
 	mkdir(directory, 0755);
 	chdir(directory);
 
-	u16 contentcount = be16(data + tmdpos + 0x1de);
+	uint16_t contentcount = be16(data + tmdpos + 0x1de);
 
 	if (verbose == 1) {
 		printf("Writing cert.cert.\r\n");
@@ -481,9 +479,9 @@ void do_extract() {
 	fwrite(data + tmdpos, 1, tmdsize, outfile);
 	fclose(outfile);
 
-	unsigned char encryptedkey[16], iv[16];
+	uint8_t encryptedkey[16], iv[16];
 
-	u8 i, j;
+	uint8_t i, j;
 	for (i = 0; i < 16; i++) {
 		encryptedkey[i] = data[tikpos + 0x1bf + i];
 	}
@@ -497,7 +495,7 @@ void do_extract() {
 	for (j = 2; j < 16; j++) iv[j] = 0x00;
 
 	for (i = 0; i < contentcount; i++) {
-		u32 contentpos = datapos;
+		uint32_t contentpos = datapos;
 		for (j = 0; j < i; j++) {
 			contentpos = contentpos + addpadding(getcontentlength(data + tmdpos, j), 64);
 		}
@@ -505,7 +503,7 @@ void do_extract() {
 		iv[0] = data[tmdpos + 0x1e8 + (0x24 * i)];
 		iv[1] = data[tmdpos + 0x1e9 + (0x24 * i)];
 
-		u32 size = addpadding(getcontentlength(data + tmdpos, i), 16);
+		uint32_t size = addpadding(getcontentlength(data + tmdpos, i), 16);
 
 		if (verbose == 1) {
 			printf("Decrypting contents %d.\r\n", i);
@@ -516,7 +514,7 @@ void do_extract() {
 		// Main rom content file
 		if (i == 5) {
 			if (verbose == 1) {
-				printf("Extracting content 5 U8 Archive.\r\n");
+				printf("Extracting content 5 uint8_t Archive.\r\n");
 			}
 
 			extract_u8_archive(data + contentpos,"content5");
@@ -559,22 +557,22 @@ void do_pack(const char *titleid, const char *channelname) {
 	if (verbose == 1) {
 		printf("Gathering WAD Header Information\r\n");
 	}
-	u32 datasize = 0;
+	uint32_t datasize = 0;
 	struct stat sbuffer;
 	stat("cert.cert", &sbuffer);
-	u32 certsize = sbuffer.st_size;
+	uint32_t certsize = sbuffer.st_size;
 
 	stat("ticket.tik", &sbuffer);
-	u32 tiksize = sbuffer.st_size;
+	uint32_t tiksize = sbuffer.st_size;
 
 	stat("metadata.tmd", &sbuffer);
-	u32 tmdsize = sbuffer.st_size;
+	uint32_t tmdsize = sbuffer.st_size;
 
 	if (verbose == 1) {
 		printf("Reading cert.cert\r\n");
 	}
 	FILE *infile = fopen("cert.cert", "rb");
-	u8 *cert = calloc(addpadding(certsize, 64), sizeof(u8));
+	uint8_t *cert = calloc(addpadding(certsize, 64), sizeof(uint8_t));
 	fread(cert, 1, certsize, infile);
 	fclose(infile);
 
@@ -582,7 +580,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading ticket.cert\r\n");
 	}
 	infile = fopen("ticket.tik", "rb");
-	u8 *tik = calloc(addpadding(tiksize, 64), sizeof(u8));
+	uint8_t *tik = calloc(addpadding(tiksize, 64), sizeof(uint8_t));
 	fread(tik, 1, tiksize, infile);
 	fclose(infile);
 
@@ -590,17 +588,17 @@ void do_pack(const char *titleid, const char *channelname) {
 		printf("Reading metadata.tmd\r\n");
 	}
 	infile = fopen("metadata.tmd", "rb");
-	u8 *tmd = calloc(addpadding(tmdsize, 64), sizeof(u8));
+	uint8_t *tmd = calloc(addpadding(tmdsize, 64), sizeof(uint8_t));
 	fread(tmd, 1, tmdsize, infile);
 	fclose(infile);
 
 	if (verbose == 1) {
 		printf("Generating Footer signature\r\n");
 	}
-	u8 *footer = calloc(0x40, sizeof(u8));
+	uint8_t *footer = calloc(0x40, sizeof(uint8_t));
 	footer[0] = 0x47;
 	footer[1] = 0x5A;
-	u32 footersize = 0x40;
+	uint32_t footersize = 0x40;
 
 	// Build Content5 into a .app file first
 
@@ -611,18 +609,18 @@ void do_pack(const char *titleid, const char *channelname) {
 	if (verbose == 1) {
 		printf("Modifying content metadata in the TMD\r\n");
 	}
-	u16 contentsc = be16(tmd + 0x1DE);
+	uint16_t contentsc = be16(tmd + 0x1DE);
 	int i;    
 
-	u32 paddedsize = 0;
-	char *cfname = malloc(20);
+	uint32_t paddedsize = 0;
+	char cfname[30];
     
 	if(patch){
 		uint8_t **fileptrs = malloc(sizeof(*fileptrs) * contentsc);
 		uint32_t *filesizes = malloc(sizeof(*filesizes) * contentsc);
 		FILE *contentfile;
 		for (i = 0; i < contentsc; i++) {
-			snprintf(cfname, 20, "content%d.app", i);
+			snprintf(cfname, 30, "content%d.app", i);
 			stat(cfname, &sbuffer);
 			fileptrs[i] = malloc(sbuffer.st_size);
 			filesizes[i] = sbuffer.st_size;
@@ -637,7 +635,7 @@ void do_pack(const char *titleid, const char *channelname) {
 		gzi_run(&gzi);
 
 		for(int i=0;i<contentsc;i++){
-			snprintf(cfname, 20, "content%d.app", i);
+			snprintf(cfname, 30, "content%d.app", i);
 			contentfile = fopen(cfname,"wb");
 			fwrite(gzi.file_ptrs[i],1,gzi.file_sizes[i],contentfile);
 			fclose(contentfile);
@@ -650,15 +648,15 @@ void do_pack(const char *titleid, const char *channelname) {
 	}
 
     for (i = 0; i < contentsc; i++) {
-		snprintf(cfname, 20, "content%d.app", i);
+		snprintf(cfname, 30, "content%d.app", i);
 		stat(cfname, &sbuffer);
-		datasize += addpadding(sbuffer.st_size, 64);
-		paddedsize += addpadding(sbuffer.st_size, 64);
-		u32 size = REVERSEENDIAN32(sbuffer.st_size);
+		datasize += addpadding(sbuffer.st_size, 0x40);
+		paddedsize += addpadding(sbuffer.st_size, 0x40);
+		uint32_t size = REVERSEENDIAN32(sbuffer.st_size);
 		memcpy(tmd + 0x1f0 + (36 * i), &size, 4);
 	};
 
-	u8 *contents = calloc(paddedsize, sizeof(u8));
+	uint8_t *contents = calloc(paddedsize, sizeof(uint8_t));
 
 	// Change Title ID
 	if (titleid != NULL) {
@@ -682,8 +680,8 @@ void do_pack(const char *titleid, const char *channelname) {
 	memcpy(tik + 0x1bf, &newkey, 16);
 
 	//Decrypt the new key
-	u8 newenc[16];
-	u8 iv[16];
+	uint8_t newenc[16];
+	uint8_t iv[16];
 
 	for (i = 0; i < 16; i++) {
 		newenc[i] = *(tik + 0x1bf + i);
@@ -703,14 +701,14 @@ void do_pack(const char *titleid, const char *channelname) {
 
 	for (i = 0; i < contentsc; i++) {
 
-		u32 contentpos = 0;
+		uint32_t contentpos = 0;
 		for (j = 0; j < i; j++) {
 			contentpos = contentpos + addpadding(getcontentlength(tmd, j), 64);
 		}
 
-		u32 size = addpadding(getcontentlength(tmd, i), 16);
+		uint32_t size = addpadding(getcontentlength(tmd, i), 16);
 
-		snprintf(cfname, 20, "content%d.app", i);
+		snprintf(cfname, 30, "content%d.app", i);
 		FILE *cfile = fopen(cfname, "rb");
 		fread(contents + contentpos, 1, size, cfile);
 		fclose(cfile);
@@ -721,14 +719,14 @@ void do_pack(const char *titleid, const char *channelname) {
 					printf("Changing the Channel Name in content0.app\r\n");
 				}
 
-				u16 imetpos = 0;
+				uint16_t imetpos = 0;
 				for (j = 0; j < 400; j++) {
 					if (contents[contentpos + j] == 0x49 && contents[contentpos + 1 + j] == 0x4D && contents[contentpos + 2 + j] == 0x45 && contents[contentpos + 3 + j] == 0x54) {
 						imetpos = j;
 						break;
 					}
 				}
-				u16 count = 0;
+				uint16_t count = 0;
 				size_t cnamelen = strlen(channelname);
 				for (j = imetpos; j < imetpos + 40; j += 2) {
 
@@ -775,7 +773,7 @@ void do_pack(const char *titleid, const char *channelname) {
 			memset(&contents[contentpos + 0x630], 0x00, 0x10);
 
 
-			u8 md5digest[16];
+			uint8_t md5digest[16];
 			do_md5(contents + contentpos + 64, md5digest, 1536);
 
 			for (j = 0; j < 16; j++) {
@@ -783,62 +781,6 @@ void do_pack(const char *titleid, const char *channelname) {
 			}
 		}
         
-		if (i == 1) {
-
-/*
-			// Memory fix 
-			contents[contentpos + 0x2EB0] = 0x60;
-			contents[contentpos + 0x2EB1] = 0x00;
-			contents[contentpos + 0x2EB3] = 0x00;
-
-			if (remap_dpad_up) {
-				if (verbose == 1) {
-					printf("\tController D-Pad Up\r\n");
-				}
-				// Mapping fix
-				// DUP
-				contents[contentpos + 0x16BAF0] = 0x08;
-				contents[contentpos + 0x16BAF1] = 0x00;
-			}if (remap_dpad_down) {
-				if (verbose == 1) {
-					printf("\tController D-Pad Down\r\n");
-				}
-				// DDown
-				contents[contentpos + 0x16BAF4] = 0x04;
-				contents[contentpos + 0x16BAF5] = 0x00;
-			}if (remap_dpad_left) {
-				if (verbose == 1) {
-					printf("\tController D-Pad Left\r\n");
-				}
-				// DLEFT
-				contents[contentpos + 0x16BAF8] = 0x02;
-				contents[contentpos + 0x16BAF9] = 0x00;
-			}if (remap_dpad_right) {
-				if (verbose == 1) {
-					printf("\tController D-Pad Right\r\n");
-				}
-				// DRIGHT
-				contents[contentpos + 0x16BAFC] = 0x01;
-				contents[contentpos + 0x16BAFD] = 0x00;
-			}
-			if (remap_cstick_down) {
-
-				if (raphnet == 1) {
-					if (verbose == 1) {
-						printf("\tController Z to L For Raphnet\r\n");
-					}
-					contents[contentpos + 0x16BAD9] = 0x20;
-				}
-				else {
-					if (verbose == 1) {
-						printf("\tController C-Stick-Down to L\r\n");
-					}
-					// CStick Down -> L
-					contents[contentpos + 0x16BB05] = 0x20;
-				}
-
-			}*/
-		}
 		iv[0] = tmd[0x1e8 + (0x24 * i)];
 		iv[1] = tmd[0x1e9 + (0x24 * i)];
 
@@ -847,7 +789,7 @@ void do_pack(const char *titleid, const char *channelname) {
 			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
 		}
 
-		u8 digest[20];
+		uint8_t digest[20];
 		do_sha1(contents + contentpos, digest, getcontentlength(tmd, i));
 
 		memcpy(tmd + 0x1f4 + (36 * i), &digest, 20);
@@ -859,7 +801,6 @@ void do_pack(const char *titleid, const char *channelname) {
 		do_encrypt(contents + contentpos, size, newenc, iv);
 
 	}
-	free(cfname);
 
 	chdir(workingdirectory);
 
@@ -878,11 +819,11 @@ void do_pack(const char *titleid, const char *channelname) {
 	char hpadding[4];
 	memset(&hpadding, 0, 4);
 
-	u32 certsizer = REVERSEENDIAN32(certsize);
-	u32 tiksizer = REVERSEENDIAN32(tiksize);
-	u32 tmdsizer = REVERSEENDIAN32(tmdsize);
-	u32 datasizer = REVERSEENDIAN32(datasize);
-	u32 footersizer = REVERSEENDIAN32(footersize);
+	uint32_t certsizer = REVERSEENDIAN32(certsize);
+	uint32_t tiksizer = REVERSEENDIAN32(tiksize);
+	uint32_t tmdsizer = REVERSEENDIAN32(tmdsize);
+	uint32_t datasizer = REVERSEENDIAN32(datasize);
+	uint32_t footersizer = REVERSEENDIAN32(footersize);
 
 	fwrite(&wadheader, 1, 8, outwadfile);
 	fwrite(&certsizer, 1, 4, outwadfile);
@@ -934,9 +875,9 @@ void genkey() {
 	char *line = malloc(4);
 	fgets(line, 4, stdin);
 
-	u8 outkey[16] = { 0x26 ,0xC2 ,0x12 ,0xB3 ,0x60 ,0xDD ,0x2E ,0x04 ,0xCF ,0x9C ,0x12 ,0x51 ,0xAF ,0x99 ,0x88 ,0xE4 };
+	uint8_t outkey[16] = { 0x26 ,0xC2 ,0x12 ,0xB3 ,0x60 ,0xDD ,0x2E ,0x04 ,0xCF ,0x9C ,0x12 ,0x51 ,0xAF ,0x99 ,0x88 ,0xE4 };
 
-	u8 iv[16];
+	uint8_t iv[16];
 	iv[0] = line[0];
 	iv[1] = line[1];
 	iv[2] = line[2];
