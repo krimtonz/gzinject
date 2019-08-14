@@ -1,5 +1,5 @@
 CC		= @CC@
-LD		= @CXX@
+LD		= @CC@
 INSTALL		= @INSTALL@
 CFLAGS		= -Wall -Wno-unused-result @CFLAGS@
 prefix 		= @prefix@

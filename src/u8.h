@@ -29,6 +29,6 @@ struct node_entry_s {
 };
 
 int create_u8_archive(const char *dir, const char *output);
-void extract_u8_archive(uint8_t *data, const char *outdir);
+int extract_u8_archive(uint8_t *data, const char *outdir);
 
 #endif

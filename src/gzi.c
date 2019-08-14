@@ -8,31 +8,42 @@
 #include "lz77.h"
 #include "gzinject.h"
 
-typedef void (*gzi_action_t)(gzi_ctxt_t *ctxt, int pos);
+typedef int (*gzi_action_t)(gzi_ctxt_t *ctxt, int pos);
 
-static void gzi_cmd_file(gzi_ctxt_t *ctxt, int pos){
+static int gzi_cmd_file(gzi_ctxt_t *ctxt, int pos){
     ctxt->curfile = ctxt->codes[pos].data & 0xFF;
+    if(verbose){
+        printf("Setting current file to %d\n",ctxt->curfile);
+    }
+    return 1;
 }
 
-static void gzi_cmd_lz77_decomp(gzi_ctxt_t *ctxt, int pos){
+static int gzi_cmd_lz77_decomp(gzi_ctxt_t *ctxt, int pos){
     int32_t curfile = ctxt->curfile;
     if(curfile<0){
         printf("Warning: No file Selected, not decompressing.\n");
-        return;
+        return 0;
     }
-    int decompsize = lz77_decompressed_size(ctxt->file_ptrs[curfile]);
-    uint8_t *decomp = calloc(decompsize+128,1);
+    if(verbose){
+        printf("LZ77 Decompressing %d\n",curfile);
+    }
+    int decompsize = addpadding(lz77_decompressed_size(ctxt->file_ptrs[curfile]),16);
+    uint8_t *decomp = calloc(decompsize,1);
     lz77_decompress(ctxt->file_ptrs[curfile],decomp);
     free(ctxt->file_ptrs[curfile]);
     ctxt->file_ptrs[curfile] = decomp;
     ctxt->file_sizes[curfile] = decompsize;
+    return 1;
 }
 
-static void gzi_cmd_lz77_comp(gzi_ctxt_t *ctxt, int pos){
+static int gzi_cmd_lz77_comp(gzi_ctxt_t *ctxt, int pos){
     int32_t curfile = ctxt->curfile;
     if(curfile<0){
         printf("Warning: No file selected, not compressing.\n");
-        return;
+        return 0;
+    }
+    if(verbose){
+        printf("LZ77 Compressing %d\n",curfile);
     }
     uint8_t *comp = NULL;
     uint32_t len = ctxt->file_sizes[curfile];
@@ -43,15 +54,19 @@ static void gzi_cmd_lz77_comp(gzi_ctxt_t *ctxt, int pos){
     free(ctxt->file_ptrs[curfile]);
     ctxt->file_ptrs[curfile] = comp;
     ctxt->file_sizes[curfile] = complen;
+    return 1;
 }
 
-static void gzi_cmd_apply_patch(gzi_ctxt_t *ctxt, int pos){
+static int gzi_cmd_apply_patch(gzi_ctxt_t *ctxt, int pos){
     int32_t curfile = ctxt->curfile;
     if(curfile<0){
         printf("Warning: No file selected, not applying patch.\n");
     }
     gzi_code code = ctxt->codes[pos];
     uint32_t val = code.data;
+    if(verbose){
+        printf("Apply patch to %d. offset %d = %d\n",curfile,code.offset,code.data);
+    }
     switch(code.len){
         case 1:
             *((uint8_t*)(ctxt->file_ptrs[curfile] + code.offset)) = (uint8_t)val;
@@ -64,6 +79,7 @@ static void gzi_cmd_apply_patch(gzi_ctxt_t *ctxt, int pos){
             *((uint32_t*)(ctxt->file_ptrs[curfile] + code.offset)) = REVERSEENDIAN32(val);
             break;
     }
+    return 1;
 }
 
 static gzi_action_t commands[] = {
@@ -92,16 +108,19 @@ static char *readline(FILE *fle){
     }
 }
 
-void gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
+int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
     FILE *fle = fopen(file,"r");
     if(!fle){
         fprintf(stderr,"Could not open %s, cannot parse file.\n",file);
+    }
+    if(verbose){
+        printf("Parings gzi file %s\n",file);
     }
     while(!feof(fle)){
         char *line = readline(fle);
         if(!line){
             fprintf(stderr,"Could not readline from gzi file %s.\n",file);
-            return;
+            return 0;
         }
         if(line[0]=='#'){
             free(line);
@@ -127,26 +146,30 @@ void gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
         free(line);
     }
     fclose(fle);
+    return 1;
 }
 
-void gzi_run(gzi_ctxt_t *ctxt){
+int gzi_run(gzi_ctxt_t *ctxt){
+    if(verbose){
+        printf("Running gzi commands\n");
+    }
     for(int i=0;i<ctxt->codecnt;i++){
         commands[ctxt->codes[i].command](ctxt,i);
     }
+    return 1;
 }
 
-void gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt){
+int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt){
     ctxt->codes = NULL;
     ctxt->codecnt=0;
     ctxt->curfile=-1;
     ctxt->file_ptrs = files;
     ctxt->file_sizes = filesizes;
     ctxt->filecnt = filecnt;
+    return 1;
 }
 
-void gzi_destroy(gzi_ctxt_t *ctxt){
+int gzi_destroy(gzi_ctxt_t *ctxt){
     if(ctxt->codes) free(ctxt->codes);
-    for(int i=0;i<ctxt->filecnt;i++){
-        free(ctxt->file_ptrs[i]);
-    }
+    return 1;
 }   

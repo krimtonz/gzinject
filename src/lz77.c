@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "lz77.h"
+#include "gzinject.h"
 
 int lz77_compressed_length(uint8_t *src){
     if(*src!=0x10){
@@ -135,7 +136,7 @@ int lz77_compress(uint8_t *src, uint8_t **dest, uint32_t len, uint32_t *lenp){
         comp[cpos++]=*(uint8_t*)cp++;
     }
     int d[2];
-    int *dbuf = malloc(0x1000 * sizeof(int));
+    int dbuf[0x4000];
     while(pos<len){
         uint8_t num1 = 0;
         uint8_t comp2[16];
@@ -165,10 +166,10 @@ int lz77_compress(uint8_t *src, uint8_t **dest, uint32_t len, uint32_t *lenp){
         comp[cpos++] = 0;
     }
     cpos--;
-    *dest = malloc(cpos);
+    len = addpadding(cpos,16);
+    *dest = calloc(len,1);
     memcpy(*dest,comp,cpos);
     free(comp);
-    free(dbuf);
-    return cpos;
+    return len;
 }
 

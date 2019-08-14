@@ -1,8 +1,6 @@
 ## About
 
-gzinject is used to extract the contents of a wad and pack it back into a wad with any changes that have been made.
-While this will work for *most* WADs, it is designed to work primarily with the Ocarina of Time wad in order to inject
-gz (the practice rom). 
+gzinject is a wad editing utility, primarily used for patching N64 VC Emulators, and replacing the rom inside.  gzinject uses patch files to patch content files within the wad. A description of the patch file format can be seen in the [Patch](#Patch) section.  
 
 ## Executable 
 
@@ -11,44 +9,63 @@ To build your own, run ./configure, then make, and make install. See BUILDING fo
 Prebuilt Windows executable is contained under releases (https://github.com/krimtonz/gzinject/releases/latest)
 
 ## Usage 
+```
+Usage:
+  gzinject -a extract -w SOURCEWAD [options]
+  gzinject -a pack -w DESTWAD [options]
+  gzinject -a inject -w SOURCEWAD -m ROM [options]
+  gzinject -a genkey [options]
+  gzinject --help
+  gzinject --version
 
-    Usage: gzinject -a,--action=(genkey | extract | pack) [options]
-      options:
-      -a, --action (genkey | extract | pack)    Defines the action to run
-        genkey: generates a common key
-        extract: extracts contents of wadfile specified by --wad to --directory
-        pack: packs contents --directory  into wad specified by --wad
-        inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad
-    
-	  -w, --wad wadfile                       Defines the wadfile to use Input wad for extracting, output wad for packing
-      -d, --directory directory               Defines the output directory for extract operations, or the input directory for pack operations
-      -m, --rom rom                           Defines the rom to inject using -a inject 
-      -o, --outputwad wad                     Defines the filename to output to when using -a inject
-      -i, --channelid channelid               Changes the channel id during packing (4 characters)
-      -t, --channeltitle channeltitle         Changes the channel title during packing (max 20 characters)
-      -r, --region [0-3]                      Changes the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE
-      --raphnet                               Maps Z To L instead of c-stick down, for N64->GC Raphnet Adapters
-      
-      disable remapping options:
-          --disable-controller-remappings         Disables all controller remappings during packing
-          --disable-cstick-d-remapping            Disables c-stick down remapping
-          --disable-dpad-d-remapping               Disables dpad-down remapping
-          --disable-dpad-u-remapping               Disables dpad-up remapping
-          --disable-dpad-l-remapping               Disables dpad-right remapping
-          --disable-dpad-r-remapping               Disables dpad-left remapping
+Actions:
+  extract      extracts SOURCEWAD to directory
+  pack         packs directory into DESTWAD
+  inject       injects rom into SOURCEWAD
+  genkey       generates wii common-key
 
-      -k, --key keyfile                       Uses the specified common key file
-      --cleanup                               Cleans up the wad directory before extracting or after packing
-      --verbose                               Prints verbose information
-      -v, --version                           Prints version information
-      -?, --help                              Prints this help message
+Options:
+  -i, --channelid=ID           New Channel ID For Pack and Inject actions (default: none)
+  -t, --title=title            New Channel ID for pack or inject actions (default: none)
+  -h, --help                   Prints this help message
+  -k, --key=keyfile            Location of the common-key file (default: common-key.bin)
+  -r, --region=1-3             Region to use (default: 3)
+  --verbose                    Print out verbose program execution information
+  -d, --directory=directory    Directory to extract contents to, or directory to read contents from (default: wadextract)
+  --cleanup                    Remove files before performing actions
+  --version                    Prints the current version
+  -m, --rom=rom                Rom to inject for inject action (default: none)
+  -o, --outputwad=outwad       The output wad for inject actions (default: SOURCEWAD-inject.wad)
+  -p, --patch-file=patchfile   gzi file to use for applying patches (default: none)
+  -c, --content=contentfile    the primary content file (default: 5)
+```
+
+## Patch
+gzi files are text files with a command on each line.  A # starting the line indicates a comment.
+
+line format:
+ccss oooooooo dddddddd\
+Where c indicates the command, s indicates the data size, o indicates the offset into the current file, and d indicates the data to replace with.
+
+```
+Commands:
+  00: Begin using content file specified by d, offset and size are not used for this command
+  01: lz77 decompress the current content file.  offset, size, and data are not used for this command
+  02: lz77 compress the current content file.  offset, size, and data are not used for this command
+  03: apply patch to currently selected file. If offset is higher than the file sizes, or a current file has not been selected, the patch is not applied
+
+Sizes:
+  01: a one byte value.  data & 0x000000FF is applied to content + offset
+  02: a two byte value.  data & 0x0000FFFF is applied to content + offset
+  04: a four byte value.  data is applied to content + offset
+```
 
 
 ## Thanks/Authors
 
-gzinject was primarily written by me, Thanks to glankk (https://github.com/glankk) for the memory/controller fixes, 
-as well as debugging, testing, and providing fixes for various errors
-The general workflow of extracting/packing the wad was taken from showmiiwads (https://github.com/dnasdw/showmiiwads/)
-AES encryption/decryption was taken from kokke (https://github.com/kokke/tiny-AES-c)
-SHA1 taken from clibs (https://github.com/clibs/sha1), MD5 taken from Alexander Peslyak
-http://openwall.info/wiki/people/solar/software/public-domain-source-code/md5
+gzinject was primarily written by me.\n
+Thanks to glankk (https://github.com/glankk) for providing memory/controller fixes for OOT as well as debugging, testing, and providing fixes for various errors\
+The general workflow of extracting/packing the wad was taken from showmiiwads (https://github.com/dnasdw/showmiiwads/)\
+AES encryption/decryption was taken from kokke (https://github.com/kokke/tiny-AES-c)\
+SHA1 taken from clibs (https://github.com/clibs/sha1)\
+MD5 taken from Alexander Peslyak http://openwall.info/wiki/people/solar/software/public-domain-source-code/md5

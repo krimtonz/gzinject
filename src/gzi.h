@@ -19,9 +19,9 @@ typedef struct{
     uint8_t filecnt;
 }gzi_ctxt_t;
 
-void gzi_parse_file(gzi_ctxt_t *ctxt, const char *file);
-void gzi_run(gzi_ctxt_t *ctxt);
-void gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt);
-void gzi_destroy(gzi_ctxt_t *ctxt);
+int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file);
+int gzi_run(gzi_ctxt_t *ctxt);
+int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt);
+int gzi_destroy(gzi_ctxt_t *ctxt);
 
 #endif

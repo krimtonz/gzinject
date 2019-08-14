@@ -87,7 +87,7 @@ int create_u8_archive(const char *dir, const char *output){
 
     node_entry_t **dirnodes = malloc(sizeof(*dirnodes));
     dirnodes[0] = &rootdirnode; 
-    get_dir_contents_recursive("content5",&dirnodes,&nodec,dirnodes[0],0);
+    get_dir_contents_recursive(dir,&dirnodes,&nodec,dirnodes[0],0);
     dirnodes[0]->node.size = nodec+1;
     node_entry_t **sorted = malloc(sizeof(*sorted) * nodec);
     sorted[0] = dirnodes[0];
@@ -101,7 +101,7 @@ int create_u8_archive(const char *dir, const char *output){
     int npos = 1 , dpos = 0, dirdepth = 0;
 
     uint8_t *data = NULL;
-    chdir("content5");
+    chdir(dir);
 
     for(int i=0;i<nodec;i++){
         sorted[i]->node.name_offset = npos;
@@ -144,7 +144,7 @@ int create_u8_archive(const char *dir, const char *output){
 	uint32_t dataoffset = header.data_offset;
 	uint16_t padcount = header.data_offset - (header.header_size + header.rootnode_offset);
 
-	FILE *foutfile = fopen("content5.app", "wb");
+	FILE *foutfile = fopen(output, "wb");
 
 	header.header_size = REVERSEENDIAN32(header.header_size);
 	header.data_offset = REVERSEENDIAN32(header.data_offset);
@@ -185,13 +185,10 @@ int create_u8_archive(const char *dir, const char *output){
 
 	fclose(foutfile);
 
-
-    struct stat sbuffer;
-    stat("content5.app",&sbuffer);
-    return sbuffer.st_size;
+    return 1;
 }
 
-void extract_u8_archive(uint8_t *data, const char *outdir){
+int extract_u8_archive(uint8_t *data, const char *outdir){
     mkdir(outdir, 0755);
 	chdir(outdir);
 	u8_header header;
@@ -232,7 +229,7 @@ void extract_u8_archive(uint8_t *data, const char *outdir){
 			fwrite(data + doffset, 1, dsize, outfile);
 			fclose(outfile);
 		}else if(type==0x0100){ // Directory
-            while(dir_depth>doffset){
+            while(dir_depth>doffset+1){
                 chdir("..");
                 dir_depth--;
             }
@@ -247,4 +244,5 @@ void extract_u8_archive(uint8_t *data, const char *outdir){
     }while(dir_depth>0);
 	free(string_table);
 	free(nodes);
+    return 1;
 }
