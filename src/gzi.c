@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "gzi.h"
 #include "lz77.h"
@@ -108,6 +109,16 @@ static char *readline(FILE *fle){
     }
 }
 
+int ishexstring(const char *string, size_t len){
+    const char *s;
+    for(s = string; *s!=0;s++){
+        if(!isxdigit(*s)){
+            return 0;
+        }
+    }
+    return s - string == len;
+}
+
 int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
     FILE *fle = fopen(file,"r");
     if(!fle){
@@ -125,11 +136,13 @@ int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
         if(line[0]=='#'){
             free(line);
             continue;
-        } 
-        char command[6];
-        char offset[10];
-        char data[10];
+        }
+        char command[6]={0};
+        char offset[10]={0};
+        char data[10]={0};
         sscanf(line,"%5s %9s %9s",command,offset,data);
+        if(!ishexstring(command,4) || !ishexstring(offset,8) || !ishexstring(offset,8))
+            continue;
         ctxt->codecnt++;
         gzi_code *new_codes = realloc(ctxt->codes,sizeof(gzi_code) * ctxt->codecnt);
         if(new_codes){
