@@ -20,6 +20,7 @@ typedef struct{
 }gzi_ctxt_t;
 
 int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file);
+int gzi_parse_embedded(gzi_ctxt_t *ctxt, const char *data, size_t len);
 int gzi_run(gzi_ctxt_t *ctxt);
 int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt);
 int gzi_destroy(gzi_ctxt_t *ctxt);

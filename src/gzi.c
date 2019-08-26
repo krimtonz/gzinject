@@ -119,13 +119,35 @@ int ishexstring(const char *string, size_t len){
     return s - string == len;
 }
 
+void parseline(gzi_ctxt_t *ctxt, const char *line){
+    char command[6]={0};
+    char offset[10]={0};
+    char data[10]={0};
+    sscanf(line,"%5s %9s %9s",command,offset,data);
+    if(!ishexstring(command,4) || !ishexstring(offset,8) || !ishexstring(offset,8))
+        return;
+    ctxt->codecnt++;
+    gzi_code *new_codes = realloc(ctxt->codes,sizeof(gzi_code) * ctxt->codecnt);
+    if(new_codes){
+        ctxt->codes = new_codes;
+    }
+    gzi_code code;
+    uint16_t cmd;
+    sscanf(command,"%"SCNx16,&cmd);
+    code.command = (cmd & 0xFF00) >> 8;
+    code.len = cmd & 0xFF;
+    sscanf(offset,"%"SCNx32,&code.offset);
+    sscanf(data,"%"SCNx32,&code.data);
+    memcpy(ctxt->codes + (ctxt->codecnt - 1),&code,sizeof(code));
+}
+
 int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
     FILE *fle = fopen(file,"r");
     if(!fle){
         fprintf(stderr,"Could not open %s, cannot parse file.\n",file);
     }
     if(verbose){
-        printf("Parings gzi file %s\n",file);
+        printf("Parsing gzi file %s\n",file);
     }
     while(!feof(fle)){
         char *line = readline(fle);
@@ -137,28 +159,22 @@ int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
             free(line);
             continue;
         }
-        char command[6]={0};
-        char offset[10]={0};
-        char data[10]={0};
-        sscanf(line,"%5s %9s %9s",command,offset,data);
-        if(!ishexstring(command,4) || !ishexstring(offset,8) || !ishexstring(offset,8))
-            continue;
-        ctxt->codecnt++;
-        gzi_code *new_codes = realloc(ctxt->codes,sizeof(gzi_code) * ctxt->codecnt);
-        if(new_codes){
-            ctxt->codes = new_codes;
-        }
-        gzi_code code;
-        uint16_t cmd;
-        sscanf(command,"%"SCNx16,&cmd);
-        code.command = (cmd & 0xFF00) >> 8;
-        code.len = cmd & 0xFF;
-        sscanf(offset,"%"SCNx32,&code.offset);
-        sscanf(data,"%"SCNx32,&code.data);
-        memcpy(ctxt->codes + (ctxt->codecnt - 1),&code,sizeof(code));
+        parseline(ctxt,line);
         free(line);
     }
     fclose(fle);
+    return 1;
+}
+
+int gzi_parse_embedded(gzi_ctxt_t *ctxt, const char *data, size_t len){
+    const char *p = data;
+    const char *linestart = p;
+    while(p-data<len){
+        if(*++p=='\n'){
+            parseline(ctxt,linestart);
+            linestart = p++;
+        }
+    }
     return 1;
 }
 

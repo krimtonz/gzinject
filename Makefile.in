@@ -1,7 +1,13 @@
 CC		= @CC@
 LD		= @CC@
+EMBEDDED_GZI   ?= 
 INSTALL		= @INSTALL@
 CFLAGS		= -Wall -Wno-unused-result @CFLAGS@
+ifeq ($(EMBEDDED_GZI),)
+CPPFLAGS		=
+else
+CPPFLAGS		= -DEMBEDDED_GZI="$(EMBEDDED_GZI)"
+endif 
 prefix 		= @prefix@
 exec_prefix 	= @exec_prefix@
 bindir		= @bindir@
@@ -29,11 +35,10 @@ install		:	$(PROGNAME)
 	$(INSTALL) -p -D --target-directory=$(bindir) $(PROGNAME)
 
 $(PROGNAME)	:	$(COBJ)
-	@echo $(CSRC)
 	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS) 
 
 $(OUTDIR)   	:
 	mkdir -p $@
 
 $(COBJ)	 	:	$(OBJDIR)/%.o: $(SRCDIR)/% | $(OBJDIR)
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) $< -o $@
