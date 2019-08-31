@@ -25,9 +25,13 @@ unsigned char key[16];
 u8 region = 0x03;
 
 int cleanup = 0, verbose = 0, raphnet = 0,
-	remap_cstick_down = 1, remap_dpad_up = 1, remap_dpad_down = 1, remap_dpad_right = 1, remap_dpad_left = 1, apply_ctrl_stick_fix = 0;
+	remap_cstick_down = 1, remap_dpad_up = 1, remap_dpad_down = 1, remap_dpad_right = 1, remap_dpad_left = 1, apply_ctrl_stick_fix = 0,
+	ctrl_stick_max_x = 106, ctrl_stick_max_x_neg = 106, ctrl_stick_max_y = 106, ctrl_stick_max_y_neg = 106, deadzone_value = 0;
 char *wad = NULL, *directory = NULL, *keyfile = NULL,
 	*workingdirectory = NULL, *rom = NULL, *outwad = NULL;
+
+#define DEADZONE 1000
+#define EXTENTS 1001
 
 static struct option cmdoptions[] = {
 	{ "action",required_argument,0,'a' },
@@ -49,6 +53,8 @@ static struct option cmdoptions[] = {
 	{ "disable-dpad-r-remapping",no_argument,&remap_dpad_right,0},
 	{ "disable-dpad-l-remapping",no_argument,&remap_dpad_left,0},
 	{ "enable-stick-fix",no_argument,&apply_ctrl_stick_fix,1},
+	{ "stick-deadzone",required_argument,0,DEADZONE},
+	{ "stick-bounds",required_argument,0,EXTENTS},
 	{"rom",required_argument,0,'m'},
 	{"outputwad",required_argument,0,'o'},
 	{0,0,0,0}
@@ -177,7 +183,9 @@ int main(int argc, char **argv) {
 
 	char *action = NULL,
 		*channelid = NULL,
-		*channeltitle = NULL;
+		*channeltitle = NULL,
+		*deadzone = NULL,
+		*extents = NULL;
 
 	while (1) {
 		int oi = 0;
@@ -231,6 +239,12 @@ int main(int argc, char **argv) {
 			remap_dpad_right = 0;
 			remap_dpad_up = 0;
 			break;
+		case DEADZONE:
+			deadzone = optarg;
+			break;
+		case EXTENTS:
+			extents = optarg;
+			break;
 		default:
 			break;
 		}
@@ -279,6 +293,62 @@ int main(int argc, char **argv) {
 		if (stat(keyfile, &sbuffer) != 0) {
 			printf("Cannot find keyfile specified.\r\n");
 			exit(1);
+		}
+	}
+
+	if (deadzone != NULL) {
+		char* endptr;
+		deadzone_value = (int)strtol(deadzone, &endptr, 10);
+		if (deadzone == endptr || *endptr != '\0') {
+			printf("Specified deadzone value %s is invalid.\r\n", deadzone);
+			exit(1);
+		}
+	}
+
+	if (extents != NULL) {
+		char* endptr, *orig_extents = extents;
+		int value = (int)strtol(extents, &endptr, 10);
+		if (extents == endptr || (*endptr != '\0' && *endptr != ',')) {
+			printf("Specified control stick extents value %s is invalid.\r\n", orig_extents);
+			exit(1);
+		}
+
+		if (*endptr == '\0') {
+			ctrl_stick_max_x = value;
+			ctrl_stick_max_x_neg = value;
+			ctrl_stick_max_y = value;
+			ctrl_stick_max_y_neg = value;
+		} else {
+			ctrl_stick_max_x = value;
+			ctrl_stick_max_x_neg = value;
+
+			extents = endptr + 1;
+			value = (int)strtol(extents, &endptr, 10);
+			if (extents == endptr || (*endptr != '\0' && *endptr != ',')) {
+				printf("Specified control stick extents value %s is invalid.\r\n", orig_extents);
+				exit(1);
+			}
+
+			if (*endptr == '\0') {
+				ctrl_stick_max_y = value;
+				ctrl_stick_max_y_neg = value;
+			} else {
+				ctrl_stick_max_x_neg = value;
+				
+				extents = endptr + 1;
+				ctrl_stick_max_y = (int)strtol(extents, &endptr, 10);
+				if (extents == endptr || *endptr != ',') {
+					printf("Specified control stick extents value %s is invalid.\r\n", orig_extents);
+					exit(1);
+				}
+
+				extents = endptr + 1;
+				ctrl_stick_max_y_neg = (int)strtol(extents, &endptr, 10);
+				if (extents == endptr || *endptr != '\0') {
+					printf("Specified control stick extents value %s is invalid.\r\n", orig_extents);
+					exit(1);
+				}
+			}
 		}
 	}
 
@@ -372,8 +442,14 @@ u32 be32(const u8 *p)
 	return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
 }
 
+u64 be64(const u8* p)
+{
+	return ((u64)p[0] << 56) | ((u64)p[1] << 48) | ((u64)p[2] << 40) | 
+	       ((u64)p[3] << 32) | (p[4] << 24) | (p[5] << 16) | (p[6] << 8) | p[7];
+}
+
 void print_usage() {
-	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -o, --outputwad wad\t\t\t\tDefines the filename to output to when using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    --disable-cstick-d-remapping\t\tDisables c-stick down remapping\r\n    --disable-dpad-d-remapping\t\t\tDisables dpad-down remapping\r\n    --disable-dpad-u-remapping\t\t\tDisables dpad-up remapping\r\n    --disable-dpad-l-remapping\t\t\tDisables dpad-left remapping\r\n    --disable-dpad-r-remapping\t\t\tDisables dpad-right remapping\r\n    --enable-stick-fix\t\t\t\tEnables fix for GC to N64 control stick mapping\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";	
+	char *usage = "Usage: gzinject -a,--action=(genkey | extract | pack | inject) [options]\r\n  options:\r\n    -a, --action(genkey | extract | pack | inject)\tDefines the action to run\r\n      genkey : generates a common key\r\n      extract : extracts contents of wadfile specified by --wad to --directory\r\n      pack : packs contents --directory  into wad specified by --wad\r\n      inject: does the extract and pack operations in one pass, requires the --rom option for the rom to inject, wad will be created as wadfile-inject.wad\r\n    -w, --wad wadfile\t\t\t\tDefines the wadfile to use Input wad for extracting, output wad for packing\r\n    -d, --directory directory\t\t\tDefines the output directory for extract operations, or the input directory for pack operations\r\n    -m, --rom rom\t\t\t\tDefines the rom to inject using -a inject\r\n    -o, --outputwad wad\t\t\t\tDefines the filename to output to when using -a inject\r\n    -i, --channelid channelid\t\t\tChanges the channel id during packing(4 characters)\r\n    -t, --channeltitle channeltitle\t\tChanges the channel title during packing(max 20 characters)\r\n    -r, --region[0 - 3]\t\t\t\tChanges the WAD region during packing 0 = JP, 1 = US, 2 = Europe, 3 = FREE\r\n    --raphnet\t\t\t\t\tMaps L to Z for raphnet adapters\r\n    --disable-controller-remappings\t\tDisables all controller remappings during packing\r\n    --disable-cstick-d-remapping\t\tDisables c-stick down remapping\r\n    --disable-dpad-d-remapping\t\t\tDisables dpad-down remapping\r\n    --disable-dpad-u-remapping\t\t\tDisables dpad-up remapping\r\n    --disable-dpad-l-remapping\t\t\tDisables dpad-left remapping\r\n    --disable-dpad-r-remapping\t\t\tDisables dpad-right remapping\r\n    --enable-stick-fix\t\t\t\tEnables fix for GC to N64 control stick mapping\r\n    --stick-deadzone size\t\t\tSets the deadzone on the control stick to the supplied value (default: 0). --enable-stick-fix is required\r\n    --stick-bounds n[,n[,n,n]]\t\t\tSets the maximum control stick values (default: 106). n = all directions the same, n,n = horizontal and vertical separate, n,n,n,n = all directions separate. --enable-stick-fix is required\r\n    -k, --key keyfile\t\t\t\tUses the specified common key file\r\n    --cleanup\t\t\t\t\tCleans up the wad directory before extracting or after packing\r\n    -v, --verbose\t\t\t\tPrints verbose information\r\n    -v , --version\t\t\t\tPrints Version information\r\n    -? , --help\t\t\t\t\tPrints this help message";	
 	printf("%s\r\n", usage);
 }
 
@@ -1083,6 +1159,32 @@ void do_pack(const char *titleid, const char *channelname) {
 				// Inject mapping function
 
 				memcpy(&contents[contentpos + 0x1e00], ctrl_stick_mapping_patch, sizeof(ctrl_stick_mapping_patch));
+
+				// Add user's requested deadzone (usually 0)
+				double deadzone_double = (double)deadzone_value;
+				u64 deadzone_be = be64((u8*)&deadzone_double);
+				memcpy(&contents[contentpos + 0x1e00 + (11 * sizeof(u64))], &deadzone_be, sizeof(u64));
+
+				// Add user's requested stick extents (usually 106)
+
+				double extents_double;
+				u64 extents_be;
+
+				extents_double = (double)ctrl_stick_max_x;
+				extents_be = be64((u8*)&extents_double);
+				memcpy(&contents[contentpos + 0x1e00 + (6 * sizeof(u64))], &extents_be, sizeof(u64));
+
+				extents_double = (double)ctrl_stick_max_x_neg;
+				extents_be = be64((u8*)&extents_double);
+				memcpy(&contents[contentpos + 0x1e00 + (7 * sizeof(u64))], &extents_be, sizeof(u64));
+
+				extents_double = (double)ctrl_stick_max_y;
+				extents_be = be64((u8*)&extents_double);
+				memcpy(&contents[contentpos + 0x1e00 + (8 * sizeof(u64))], &extents_be, sizeof(u64));
+
+				extents_double = (double)ctrl_stick_max_y_neg;
+				extents_be = be64((u8*)&extents_double);
+				memcpy(&contents[contentpos + 0x1e00 + (9 * sizeof(u64))], &extents_be, sizeof(u64));
 			}
 		}
 
