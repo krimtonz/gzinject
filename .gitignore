@@ -276,3 +276,4 @@ Makefile
 config.*
 gzinject
 *.zip
+autom4te.cache/

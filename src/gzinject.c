@@ -13,6 +13,7 @@
 #include "aes.h"
 #include "sha1.h"
 #include "md5.h"
+#include "romchu.h"
 
 #ifdef EMBEDDED_GZI
 #define QUOTE(x) QUOTE_(x)
@@ -188,6 +189,7 @@ static void print_usage() {
     "  gzinject -a extract -w SOURCEWAD [options]\n"
     "  gzinject -a pack -w DESTWAD [options]\n"
     "  gzinject -a inject -w SOURCEWAD -m ROM [options]\n"
+    "  gzinject -a romc -m INROM -o OUTROM [options]\n"
     "  gzinject -a genkey [options]\n"
     "  gzinject --help\n"
     "  gzinject --version\n\n"
@@ -195,6 +197,7 @@ static void print_usage() {
     "  extract      extracts SOURCEWAD to directory\n"
     "  pack         packs directory into DESTWAD\n"
     "  inject       injects rom into SOURCEWAD\n"
+    "  romc         decompresses a romc compressed rom\n"
     "  genkey       generates wii common-key\n\n"
     "Options:\n"
     "  -i, --channelid=ID           New Channel ID For Pack and Inject actions (default: none)\n"
@@ -206,8 +209,8 @@ static void print_usage() {
     "  -d, --directory=directory    Directory to extract contents to, or directory to read contents from (default: ./wadextract)\n"
     "  --cleanup                    Remove files before performing actions\n"
     "  --version                    Prints the current version\n"
-    "  -m, --rom=rom                Rom to inject for inject action (default: none)\n"
-    "  -o, --outputwad=outwad       The output wad for inject actions (default: SOURCEWAD-inject.wad)\n"
+    "  -m, --rom=rom                Rom to inject for inject action (default: none), also rom to romc decompress\n"
+    "  -o, --outputwad=outwad       The output wad for inject actions (default: SOURCEWAD-inject.wad), also output for romc decompression\n"
 #ifndef EMBEDDED_GZI
     "  -p, --patch-file=patchfile   gzi file to use for applying patches (default: none)\n"
 #endif
@@ -959,6 +962,42 @@ error:
     return 0;
 }
 
+void romc(){
+    if(outwad == NULL || rom == NULL){
+        print_usage();
+        exit(1);
+    }
+    printf("Decompressing %s\n",rom);
+    struct stat sbuffer;
+    stat(rom,&sbuffer);
+    FILE *inrom = fopen(rom,"rb");
+    if(!inrom){
+        printf("Could not open %s\n",rom);
+        exit(1);
+    }
+    uint8_t *comp = malloc(sbuffer.st_size);
+    if(!comp){
+        printf("Could not alloc %ld bytes\n",sbuffer.st_size);
+    }
+    fread(comp,1,sbuffer.st_size,inrom);
+    fclose(inrom);
+    size_t decomp_size;
+    uint8_t *decomp = romchu_decompress(comp,sbuffer.st_size,&decomp_size);
+    free(comp);
+    if(!decomp){
+        printf("Could not decompress %s\n",rom);
+        exit(1);
+    }
+    FILE *outrom = fopen(outwad,"wb");
+    if(!outrom){
+        printf("Could not open %s for writing\n",outwad);
+        exit(1);
+    }
+    fwrite(decomp,1,decomp_size,outrom);
+    fclose(outrom);
+    free(decomp);
+}
+
 static void genkey() {
 	printf("Enter 45e and press enter: ");
 	char *line = malloc(4);
@@ -987,7 +1026,6 @@ static void genkey() {
 }
 
 int main(int argc, char **argv) {
-
 	setbuf(stdout, NULL);
 
 	int opt;
@@ -1061,6 +1099,11 @@ int main(int argc, char **argv) {
 		print_usage();
 		exit(1);
 	}
+
+    if(strcmp(action, "romc") == 0){
+        romc();
+        return 0;
+    }
 
 	if (strcmp(action, "genkey") == 0){
 		genkey();
