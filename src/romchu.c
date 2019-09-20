@@ -55,7 +55,7 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
         if (romc_type != 2)
         {
             fprintf(stderr,"Expected type 2 romc, got %d\n", romc_type);
-            return 1;
+            return NULL;
         }
     }
 
@@ -103,7 +103,7 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
     if (!decompressed)
     {
         perror("malloc big outbuf buffer");
-        return 1;
+        return NULL;
     }
     out_offset = 0;
     // decode each block
@@ -163,7 +163,8 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
         if (read_size > sizeof(payload_buf))
         {
             fprintf(stderr, "payload too large\n");
-            return 1;
+            free(decompressed);
+            return NULL;
         }
         memcpy(payload_buf,compressed,read_size);
         compressed+=read_size;
@@ -216,7 +217,8 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
                     if (out_offset >= nominal_size)
                     {
                         fprintf(stderr, "generated too many bytes\n");
-                        return 1;
+                        free(decompressed);
+                        return NULL;
                     }
                     decompressed[out_offset++] = b;
                 }
@@ -244,12 +246,14 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
                     if (disp > out_offset)
                     {
                         fprintf(stderr, "backreference too far\n");
-                        return 1;
+                        free(decompressed);
+                        return NULL;
                     }
                     if (out_offset+len > nominal_size)
                     {
                         fprintf(stderr, "generated too many bytes\n");
-                        return 1;
+                        free(decompressed);
+                        return NULL;
                     }
                     for (unsigned int i = 0; i < len; i++, out_offset++)
                     {
@@ -267,7 +271,8 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
             if (out_offset + payload_bytes > nominal_size)
             {
                 fprintf(stderr, "generated too many bytes\n");
-                return 1;
+                free(decompressed);
+                return NULL;
             }
             memcpy(decompressed+out_offset, payload_buf, payload_bytes);
             out_offset += payload_bytes;
