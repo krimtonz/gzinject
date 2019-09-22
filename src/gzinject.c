@@ -362,8 +362,6 @@ static int do_extract() {
 
 	if (verbose) {
 		printf("Writing metadata.tmd.\r\n");
-        free(data);
-        return 0;
 	}
 	outfile = fopen("metadata.tmd", "wb");
     if(!outfile){
