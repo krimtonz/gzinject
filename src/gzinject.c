@@ -797,7 +797,7 @@ static int do_pack() {
                 if (verbose) {
                     printf("Signing the new Channel Name\r\n");
                 }
-
+                memset(contents + 0x630,0,16);
                 uint8_t md5digest[16];
                 do_md5(contents + 64, md5digest, 1536);
 
