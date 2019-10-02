@@ -142,7 +142,7 @@ static void removefile(const char* file) {
 		}
 		else if ((sbuffer.st_mode & S_IFMT) == S_IFREG) {
 			if (verbose) {
-				printf("Removing %s\r\n", file);
+				printf("Removing %s\n", file);
 			}
 			remove(file);
 		}
@@ -163,7 +163,7 @@ static void removedir(const char *file) {
 			free(path);
 		}
 		if (verbose) {
-			printf("Removing %s\r\n", file);
+			printf("Removing %s\n", file);
 		}
 		rmdir(file);
 	}
@@ -255,12 +255,12 @@ static int do_extract() {
 	struct stat sbuffer;
 
 	if (stat(wad, &sbuffer) != 0) {
-		printf("Could not open %s\r\n", wad);
+		printf("Could not open %s\n", wad);
 		return 0;
 	}
 
 	if (verbose) {
-		printf("Extracting %s to %s\r\n", wad, directory);
+		printf("Extracting %s to %s\n", wad, directory);
 	}
 
 	uint8_t *data = (uint8_t*)malloc(sbuffer.st_size);
@@ -326,7 +326,7 @@ static int do_extract() {
 	uint16_t contentcount = be16(data + tmdpos + 0x1de);
 
 	if (verbose) {
-		printf("Writing cert.cert.\r\n");
+		printf("Writing cert.cert.\n");
 	}
 	FILE* outfile = fopen("cert.cert", "wb");
     if(!outfile){
@@ -344,7 +344,7 @@ static int do_extract() {
 	fclose(outfile);
 
 	if (verbose) {
-		printf("Writing ticket.tik.\r\n");
+		printf("Writing ticket.tik.\n");
 	}
 	outfile = fopen("ticket.tik", "wb");
     if(!outfile){
@@ -361,7 +361,7 @@ static int do_extract() {
 	fclose(outfile);
 
 	if (verbose) {
-		printf("Writing metadata.tmd.\r\n");
+		printf("Writing metadata.tmd.\n");
 	}
 	outfile = fopen("metadata.tmd", "wb");
     if(!outfile){
@@ -378,7 +378,7 @@ static int do_extract() {
 	fclose(outfile);
 
     if(verbose){
-        printf("Writing footer.bin\r\n");
+        printf("Writing footer.bin\n");
     }
     outfile = fopen("footer.bin","wb");
     if(!outfile){
@@ -421,7 +421,7 @@ static int do_extract() {
 		uint32_t size = addpadding(getcontentlength(data + tmdpos, i), 16);
 
 		if (verbose) {
-			printf("Decrypting contents %d.\r\n", i);
+			printf("Decrypting contents %d.\n", i);
 		}
 
 		do_decrypt(data + contentpos, size, encryptedkey, iv);
@@ -429,7 +429,7 @@ static int do_extract() {
 		// Main rom content file
 		if (i == content_num) {
 			if (verbose) {
-				printf("Extracting content %d uint8_t Archive.\r\n",content_num);
+				printf("Extracting content %d uint8_t Archive.\n",content_num);
 			}
             char dbuf[100];
             snprintf(dbuf,100,"content%d",content_num);
@@ -443,7 +443,7 @@ static int do_extract() {
 		char contentname[100];
 		snprintf(contentname, 100, "content%d.app", i);
 		if (verbose) {
-			printf("Writing %s.\r\n", contentname);
+			printf("Writing %s.\n", contentname);
 		}
 		outfile = fopen(contentname, "wb");
         if(!outfile){
@@ -470,7 +470,7 @@ static int do_pack() {
 		closedir(testdir);
 	}
 	else {
-		fprintf(stderr,"%s doesn't exist, or is not a directory!\r\n", directory);
+		fprintf(stderr,"%s doesn't exist, or is not a directory!\n", directory);
 		return 0;
 	}
 
@@ -483,7 +483,7 @@ static int do_pack() {
     }
 
 	if (verbose) {
-		printf("Gathering WAD Header Information\r\n");
+		printf("Gathering WAD Header Information\n");
 	}
 
 	struct stat sbuffer;
@@ -506,7 +506,7 @@ static int do_pack() {
 	uint32_t tmdsize = sbuffer.st_size;
 
 	if (verbose) {
-		printf("Reading cert.cert\r\n");
+		printf("Reading cert.cert\n");
 	}
 	FILE *infile = fopen("cert.cert", "rb");
     if(!infile){
@@ -527,7 +527,7 @@ static int do_pack() {
 	fclose(infile);
 
 	if (verbose) {
-		printf("Reading ticket.cert\r\n");
+		printf("Reading ticket.cert\n");
 	}
 	infile = fopen("ticket.tik", "rb");
     if(!infile){
@@ -551,7 +551,7 @@ static int do_pack() {
 	fclose(infile);
 
 	if (verbose) {
-		printf("Reading metadata.tmd\r\n");
+		printf("Reading metadata.tmd\n");
 	}
 	infile = fopen("metadata.tmd", "rb");
     if(!infile){
@@ -578,7 +578,7 @@ static int do_pack() {
 	fclose(infile);
 
 	if (verbose) {
-		printf("Generating Footer signature\r\n");
+		printf("Generating Footer signature\n");
 	}
 	char footer[0x40] = {0};
 	sprintf(footer,"gzinject v%s https://github.com/krimtonz/gzinject", GZINJECT_VERSION);
@@ -603,7 +603,7 @@ static int do_pack() {
     }
 
 	if (verbose) {
-		printf("Modifying content metadata in the TMD\r\n");
+		printf("Modifying content metadata in the TMD\n");
 	}
 	uint16_t contentsc = be16(tmd + 0x1DE);
 	int i;    
@@ -725,20 +725,20 @@ static int do_pack() {
 	// Change Title ID
 	if (titleid != NULL) {
 		if (verbose) {
-			printf("Changing Channel ID\r\n");
+			printf("Changing Channel ID\n");
 		}
 		memcpy(tik + 0x1e0, titleid, 4);
 		memcpy(tmd + 0x190, titleid, 4);
 	}
 
 	if (verbose) {
-		printf("Changing region in the TMD\r\n");
+		printf("Changing region in the TMD\n");
 	}
 	// Change the Region
 	tmd[0x19d] = region;
 
 	if (verbose) {
-		printf("Changing encryption key in the ticket\r\n");
+		printf("Changing encryption key in the ticket\n");
 	}
 	// New key
 	memcpy(tik + 0x1bf, &newkey, 16);
@@ -769,7 +769,7 @@ static int do_pack() {
 		if (i == 0) {
 			if (channelname != NULL) {
 				if (verbose) {
-					printf("Changing the Channel Name in content0.app\r\n");
+					printf("Changing the Channel Name in content0.app\n");
 				}
 
 				uint16_t imetpos = -1;
@@ -795,7 +795,7 @@ static int do_pack() {
                 }
 
                 if (verbose) {
-                    printf("Signing the new Channel Name\r\n");
+                    printf("Signing the new Channel Name\n");
                 }
                 memset(contents + 0x630,0,16);
                 uint8_t md5digest[16];
@@ -813,7 +813,7 @@ skipmd5:
 
 
 		if (verbose) {
-			printf("Generating signature for the content %d, and copying signature to the TMD\r\n", i);
+			printf("Generating signature for the content %d, and copying signature to the TMD\n", i);
 		}
 
 		uint8_t digest[20];
@@ -822,7 +822,7 @@ skipmd5:
 		memcpy(tmd + 0x1f4 + (36 * i), &digest, 20);
 
 		if (verbose) {
-			printf("Encrypting content %d\r\n", i);
+			printf("Encrypting content %d\n", i);
 		}
         
 		do_encrypt(contents, filesizes[i], newenc, iv);
@@ -836,7 +836,7 @@ skipmd5:
 
 
 	if (verbose) {
-		printf("Generating WAD Header, and flipping endianness\r\n");
+		printf("Generating WAD Header, and flipping endianness\n");
 	}
 
 	FILE *outwadfile = fopen(wad, "wb");
@@ -878,7 +878,7 @@ skipmd5:
         goto error;
     }
 	if (verbose) {
-		printf("Writing certificate\r\n");
+		printf("Writing certificate\n");
 	}
 	fwrite(cert, 1, addpadding(certsize, 64), outwadfile);
     if(ferror(outwadfile)){
@@ -886,7 +886,7 @@ skipmd5:
         goto error;
     }
 	if (verbose) {
-		printf("Writing ticket\r\n");
+		printf("Writing ticket\n");
 	}
 	fwrite(tik, 1, addpadding(tiksize, 64), outwadfile);
     if(ferror(outwadfile)){
@@ -894,7 +894,7 @@ skipmd5:
         goto error;
     }
 	if (verbose) {
-		printf("Writing medatadata\r\n");
+		printf("Writing medatadata\n");
 	}
 	fwrite(tmd, 1, addpadding(tmdsize, 64), outwadfile);
     if(ferror(outwadfile)){
@@ -902,7 +902,7 @@ skipmd5:
         goto error;
     }
 	if (verbose) {
-		printf("Writing data\r\n");
+		printf("Writing data\n");
 	}
     char padding[64] = {0};
     for(i=0;i<contentsc;i++){
@@ -921,7 +921,7 @@ skipmd5:
         }
     }
 	if (verbose) {
-		printf("Writing footer\r\n");
+		printf("Writing footer\n");
 	}
 	fwrite(footer, 1, 0x40, outwadfile);
     if(ferror(outwadfile)){
@@ -1020,7 +1020,7 @@ static void genkey() {
 	fwrite(&outkey, 1, 16, keyf);
 	fclose(keyf);
 
-	printf("%s successfully generated!\r\n", keyfile);
+	printf("%s successfully generated\n", keyfile);
 }
 
 int main(int argc, char **argv) {
@@ -1129,13 +1129,13 @@ int main(int argc, char **argv) {
 			keyfile = "common-key.bin";
 		}
 		else {
-			printf("Cannot find key.bin or common-key.bin.\r\n");
+			printf("Cannot find key.bin or common-key.bin.\n");
 			exit(1);
 		}
 	}
 	else {
 		if (stat(keyfile, &sbuffer) != 0) {
-			printf("Cannot find keyfile specified.\r\n");
+			printf("Cannot find keyfile specified.\n");
 			exit(1);
 		}
 	}
@@ -1184,7 +1184,7 @@ int main(int argc, char **argv) {
         }
 
 		if (verbose) {
-			printf("Copying %s to %s/content%d/rom\r\n", rom, directory,content_num);
+			printf("Copying %s to %s/content%d/rom\n", rom, directory,content_num);
 		}
 		FILE *from = fopen(rom, "rb");
 		fseek(from, 0, SEEK_END);
