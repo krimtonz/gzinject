@@ -21,6 +21,12 @@ typedef enum{
     FILE_NORMAL
 }filetype_t;
 
+typedef struct patch_list patch_list_t;
+struct patch_list {
+    const char   *filename;
+    patch_list_t *next;
+};
+
  uint16_t be16(const uint8_t *p);
 
  uint32_t be32(const uint8_t *p);
