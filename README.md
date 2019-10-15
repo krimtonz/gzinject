@@ -38,6 +38,8 @@ Options:
   -o, --outputwad=outwad       The output wad for inject actions (default: SOURCEWAD-inject.wad)
   -p, --patch-file=patchfile   gzi file to use for applying patches (default: none)
   -c, --content=contentfile    the primary content file (default: 5)
+  --dol-inject                 Binary data to inject into the emulator program, requires --dol-loading
+  --dol-loading                The loading address for the binary specified by --dol-inject
 ```
 
 ## Patch

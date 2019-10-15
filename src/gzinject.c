@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <inttypes.h>
 
 #include "gzinject.h"
 #include "lz77.h"
@@ -14,6 +15,7 @@
 #include "sha1.h"
 #include "md5.h"
 #include "romchu.h"
+#include "doltool.h"
 
 #ifdef EMBEDDED_GZI
 #define QUOTE(x) QUOTE_(x)
@@ -49,6 +51,8 @@ static char *patch = NULL;
 #endif
 static char *titleid = NULL;
 static char *channelname = NULL;
+static char *dol_inject_file = NULL;
+static char *dol_loading = NULL;
 
 uint16_t be16(const uint8_t *p)
 {
@@ -78,6 +82,8 @@ static const struct option cmdoptions[] = {
     { "patch-file",required_argument,0,'p'},
 #endif
     { "content-num",required_argument,0,'c'},
+    { "dol-inject",required_argument,0,'f'},
+    { "dol-loading",required_argument,0,'l'},
 	{ 0,0,0,0}
 };
 
@@ -215,6 +221,8 @@ static void print_usage() {
     "  -p, --patch-file=patchfile   gzi file to use for applying patches (default: none)\n"
 #endif
     "  -c, --content=contentfile    the primary content file (default: 5)\n"
+    "  --dol-inject                 Binary data to inject into the emulator program, requires --dol-loading\n"
+    "  --dol-loading                The loading address for the binary specified by --dol-inject\n"
     );
 }
 
@@ -656,23 +664,23 @@ static int do_pack() {
     }
 
 	if(chdir(workingdirectory)!=0){
-        fprintf(stderr,"Could not change directory to %s\n",workingdirectory);
+        fprintf(stderr,"Could not change directory to %s",workingdirectory);
     }
 	gzi_ctxt_t gzi;
 	if(!gzi_init(&gzi,fileptrs,filesizes,contentsc)){
-        perror("Could not initialize patch file\n");
+        perror("Could not initialize patch file");
         goto error;
     }
 	if(!gzi_parse_embedded(&gzi,_embedded_gzi_start,EMBEDDED_SIZE)){
-        perror("Could not parse gzi patch file\n");
+        perror("Could not parse gzi patch file");
         goto error;
     }
 	if(!gzi_run(&gzi)){
-        perror("Could not run gzi patch file\n");
+        perror("Could not run gzi patch file");
         goto error;
     }
     if(chdir(directory)!=0){
-        fprintf(stderr,"Could not change directory to %s\n",directory);
+        fprintf(stderr,"Could not change directory to %s",directory);
         goto error;
     }
 
@@ -681,7 +689,7 @@ static int do_pack() {
 	}
 
 	if(!gzi_destroy(&gzi)){
-        perror("Could not destory gzi patch file\n");
+        perror("Could not destory gzi patch file");
         goto error;
     }
 #else
@@ -691,24 +699,24 @@ static int do_pack() {
         }
 
 		if(chdir(workingdirectory)!=0){
-            fprintf(stderr,"Could not change directory to %s\n",workingdirectory);
+            fprintf(stderr,"Could not change directory to %s",workingdirectory);
         }
 		gzi_ctxt_t gzi;
 		if(!gzi_init(&gzi,fileptrs,filesizes,contentsc)){
-            perror("Could not initialize patch file\n");
+            perror("Could not initialize patch file");
             goto error;
 
         }
 		if(!gzi_parse_file(&gzi,patch)){
-            perror("Could not parse gzi patch file\n");
+            perror("Could not parse gzi patch file");
             goto error;
         }
 		if(!gzi_run(&gzi)){
-            perror("Could not run gzi patch file\n");
+            perror("Could not run gzi patch file");
             goto error;
         }
         if(chdir(directory)!=0){
-            fprintf(stderr,"Could not change directory to %s\n",directory);
+            fprintf(stderr,"Could not change directory to %s",directory);
             goto error;
         }
 
@@ -717,11 +725,41 @@ static int do_pack() {
 		}
 
 		if(!gzi_destroy(&gzi)){
-            perror("Could not destory gzi patch file\n");
+            perror("Could not destory gzi patch file");
             goto error;
         }
 	}
 #endif
+
+    if(dol_inject_file){
+        chdir(workingdirectory);
+        doltool_ctxt_t *dolctxt = calloc(1,sizeof(*dolctxt));
+        if(!dolctxt){
+            perror("Could not create dol ctxt");
+            goto error;
+        }
+        dol_load(dolctxt,&fileptrs[1],&filesizes[1]);
+        FILE *inject_file = fopen(dol_inject_file,"rb");
+        if(!inject_file){
+            perror(dol_inject_file);
+            goto error;
+        }
+        stat(dol_inject_file,&sbuffer);
+        uint8_t *inject_data = malloc(sbuffer.st_size);
+        fread(inject_data,1,sbuffer.st_size,inject_file);
+        fclose(inject_file);
+
+        char loading_address[10];
+        sscanf(dol_loading,"%9s",loading_address);
+        uint32_t addr;
+        sscanf(loading_address,"%"SCNx32,&addr);
+        dol_inject(dolctxt,inject_data,sbuffer.st_size,addr);
+        dol_save(dolctxt);
+        free(dolctxt);
+        setcontentlength(tmd,1,filesizes[1]);
+        chdir(directory);
+    }
+
 	// Change Title ID
 	if (titleid != NULL) {
 		if (verbose) {
@@ -1086,6 +1124,12 @@ int main(int argc, char **argv) {
         case 'c':
             content_num = optarg[0] - 0x30;
             if(content_num<0 || content_num>9) content_num=5;
+            break;
+        case 'f':
+            dol_inject_file = optarg;
+            break;
+        case 'l':
+            dol_loading = optarg;
             break;
 		default:
 			break;
