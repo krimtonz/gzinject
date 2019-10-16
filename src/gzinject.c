@@ -47,7 +47,8 @@ static char	*workingdirectory = NULL;
 static char *rom = NULL; 
 static char *outwad = NULL;
 #ifndef EMBEDDED_GZI
-static char *patch = NULL;
+static patch_list_t *patch = NULL;
+static patch_list_t **patch_link = &patch;
 #endif
 static char *titleid = NULL;
 static char *channelname = NULL;
@@ -693,9 +694,9 @@ static int do_pack() {
         goto error;
     }
 #else
-	if(patch){
+	while(patch){
         if(verbose){
-            printf("Applying %s gzi patches\n",patch);
+            printf("Applying %s gzi patches\n",patch->filename);
         }
 
 		if(chdir(workingdirectory)!=0){
@@ -707,7 +708,7 @@ static int do_pack() {
             goto error;
 
         }
-		if(!gzi_parse_file(&gzi,patch)){
+		if(!gzi_parse_file(&gzi,patch->filename)){
             perror("Could not parse gzi patch file");
             goto error;
         }
@@ -728,6 +729,10 @@ static int do_pack() {
             perror("Could not destory gzi patch file");
             goto error;
         }
+
+        patch_list_t *old_patch = patch;
+        patch = patch->next;
+        free(old_patch);
 	}
 #endif
 
@@ -1117,9 +1122,18 @@ int main(int argc, char **argv) {
 			outwad = optarg;
 			break;
 #ifndef EMBEDDED_GZI
-        case 'p':
-            patch = optarg;
+        case 'p': {
+            patch_list_t *new_patch = malloc(sizeof(*new_patch));
+            if (new_patch == NULL) {
+                perror("Could not allocate patch list");
+                exit(1);
+            }
+            new_patch->filename = optarg;
+            new_patch->next = NULL;
+            *patch_link = new_patch;
+            patch_link = &new_patch->next;
             break;
+        }
 #endif
         case 'c':
             content_num = optarg[0] - 0x30;
