@@ -17,21 +17,6 @@
 #include "romchu.h"
 #include "doltool.h"
 
-#ifdef EMBEDDED_GZI
-#define QUOTE(x) QUOTE_(x)
-#define QUOTE_(x) #x
-extern const char _embedded_gzi_start[];
-extern const char _embedded_gzi_end[];
-__asm__(
- ".section \".rodata\", \"a\", @progbits\n"
- "_embedded_gzi_start:\n"
- ".incbin \"" QUOTE(EMBEDDED_GZI) "\"\n"
- "_embedded_gzi_end:\n"
- ".previous\n"
-);
-#define EMBEDDED_SIZE _embedded_gzi_end - _embedded_gzi_start
-#endif
-
 static uint8_t key[16] = {0};
 static uint8_t region = 0x03;
 
@@ -46,10 +31,8 @@ static char *keyfile = NULL;
 static char	*workingdirectory = NULL;
 static char *rom = NULL; 
 static char *outwad = NULL;
-#ifndef EMBEDDED_GZI
 static patch_list_t *patch = NULL;
 static patch_list_t **patch_link = &patch;
-#endif
 static char *titleid = NULL;
 static char *channelname = NULL;
 static char *dol_inject_file = NULL;
@@ -79,9 +62,7 @@ static const struct option cmdoptions[] = {
 	{ "version",no_argument,0,'v'},
 	{ "rom",required_argument,0,'m'},
 	{ "outputwad",required_argument,0,'o'},
-#ifndef EMBEDDED_GZI
     { "patch-file",required_argument,0,'p'},
-#endif
     { "content-num",required_argument,0,'c'},
     { "dol-inject",required_argument,0,'f'},
     { "dol-loading",required_argument,0,'l'},
@@ -218,9 +199,7 @@ static void print_usage() {
     "  --version                    Prints the current version\n"
     "  -m, --rom=rom                Rom to inject for inject action (default: none), also rom to romc decompress\n"
     "  -o, --outputwad=outwad       The output wad for inject actions (default: SOURCEWAD-inject.wad), also output for romc decompression\n"
-#ifndef EMBEDDED_GZI
     "  -p, --patch-file=patchfile   gzi file to use for applying patches (default: none)\n"
-#endif
     "  -c, --content=contentfile    the primary content file (default: 5)\n"
     "  --dol-inject                 Binary data to inject into the emulator program, requires --dol-loading\n"
     "  --dol-loading                The loading address for the binary specified by --dol-inject\n"
@@ -659,41 +638,6 @@ static int do_pack() {
         setcontentlength(tmd,i,filesizes[i]);
 	}
 
-#ifdef EMBEDDED_GZI
-    if(verbose){
-        printf("Applying embedded gzi patches\n");
-    }
-
-	if(chdir(workingdirectory)!=0){
-        fprintf(stderr,"Could not change directory to %s",workingdirectory);
-    }
-	gzi_ctxt_t gzi;
-	if(!gzi_init(&gzi,fileptrs,filesizes,contentsc)){
-        perror("Could not initialize patch file");
-        goto error;
-    }
-	if(!gzi_parse_embedded(&gzi,_embedded_gzi_start,EMBEDDED_SIZE)){
-        perror("Could not parse gzi patch file");
-        goto error;
-    }
-	if(!gzi_run(&gzi)){
-        perror("Could not run gzi patch file");
-        goto error;
-    }
-    if(chdir(directory)!=0){
-        fprintf(stderr,"Could not change directory to %s",directory);
-        goto error;
-    }
-
-	for(int i=0;i<contentsc;i++){
-        setcontentlength(tmd,i,gzi.file_sizes[i]);
-	}
-
-	if(!gzi_destroy(&gzi)){
-        perror("Could not destory gzi patch file");
-        goto error;
-    }
-#else
 	while(patch){
         if(verbose){
             printf("Applying %s gzi patches\n",patch->filename);
@@ -703,7 +647,7 @@ static int do_pack() {
             fprintf(stderr,"Could not change directory to %s",workingdirectory);
         }
 		gzi_ctxt_t gzi;
-		if(!gzi_init(&gzi,fileptrs,filesizes,contentsc)){
+		if(!gzi_init(&gzi,fileptrs,filesizes,contentsc,tmd,tik,cert,&tmdsize,&tiksize,&certsize)){
             perror("Could not initialize patch file");
             goto error;
 
@@ -734,7 +678,6 @@ static int do_pack() {
         patch = patch->next;
         free(old_patch);
 	}
-#endif
 
     if(dol_inject_file){
         chdir(workingdirectory);
@@ -1075,11 +1018,7 @@ int main(int argc, char **argv) {
 
 	while (1) {
 		int oi = 0;
-#ifndef EMBEDDED_GZI
 		opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:vm:o:p:c:", cmdoptions, &oi);
-#else
-        opt = getopt_long(argc, argv, "a:w:i:t:?k:r:d:vm:o:c:", cmdoptions, &oi);
-#endif
 		if (opt == -1) break;
 		switch (opt) {
 		case 'a':
@@ -1121,7 +1060,6 @@ int main(int argc, char **argv) {
 		case 'o':
 			outwad = optarg;
 			break;
-#ifndef EMBEDDED_GZI
         case 'p': {
             patch_list_t *new_patch = malloc(sizeof(*new_patch));
             if (new_patch == NULL) {
@@ -1134,7 +1072,6 @@ int main(int argc, char **argv) {
             patch_link = &new_patch->next;
             break;
         }
-#endif
         case 'c':
             content_num = optarg[0] - 0x30;
             if(content_num<0 || content_num>9) content_num=5;

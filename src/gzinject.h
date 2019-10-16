@@ -9,7 +9,7 @@
 
 #define W_TIK 0x00
 #define W_TMD 0x01
-#define GZINJECT_VERSION "0.3.2"
+#define GZINJECT_VERSION "0.3.3"
 
 #if _WIN32
 #define mkdir(X,Y) mkdir(X)

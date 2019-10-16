@@ -63,21 +63,39 @@ static int gzi_cmd_apply_patch(gzi_ctxt_t *ctxt, int pos){
     if(curfile<0){
         printf("Warning: No file selected, not applying patch.\n");
     }
-    gzi_code code = ctxt->codes[pos];
+    gzi_code_t code = ctxt->codes[pos];
     uint32_t val = code.data;
     if(verbose){
         printf("Apply patch to %d. offset %d = %d\n",curfile,code.offset,code.data);
     }
+    uint8_t *p;
+    switch(curfile){
+        case GZI_FILE_TMD:
+            p = ctxt->tmd;
+            break;
+        case GZI_FILE_TIK:
+            p = ctxt->tik;
+            break;
+        case GZI_FILE_CERT:
+            p = ctxt->cert;
+            break;
+        default:
+            if(curfile>ctxt->filecnt-1){
+                return -1;
+            }
+            p = ctxt->file_ptrs[curfile];
+            break;
+    }
     switch(code.len){
         case 1:
-            *((uint8_t*)(ctxt->file_ptrs[curfile] + code.offset)) = (uint8_t)val;
+            *((uint8_t*)(p + code.offset)) = (uint8_t)val;
             break;
         case 2:
-            *((uint16_t*)(ctxt->file_ptrs[curfile] + code.offset)) = REVERSEENDIAN16((uint16_t)val);
+            *((uint16_t*)(p + code.offset)) = REVERSEENDIAN16((uint16_t)val);
             break;
         case 4:
         default:
-            *((uint32_t*)(ctxt->file_ptrs[curfile] + code.offset)) = REVERSEENDIAN32(val);
+            *((uint32_t*)(p + code.offset)) = REVERSEENDIAN32(val);
             break;
     }
     return 1;
@@ -127,11 +145,11 @@ void parseline(gzi_ctxt_t *ctxt, const char *line){
     if(!ishexstring(command,4) || !ishexstring(offset,8) || !ishexstring(offset,8))
         return;
     ctxt->codecnt++;
-    gzi_code *new_codes = realloc(ctxt->codes,sizeof(gzi_code) * ctxt->codecnt);
+    gzi_code_t *new_codes = realloc(ctxt->codes,sizeof(gzi_code_t) * ctxt->codecnt);
     if(new_codes){
         ctxt->codes = new_codes;
     }
-    gzi_code code;
+    gzi_code_t code;
     uint16_t cmd;
     sscanf(command,"%"SCNx16,&cmd);
     code.command = (cmd & 0xFF00) >> 8;
@@ -166,18 +184,6 @@ int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
     return 1;
 }
 
-int gzi_parse_embedded(gzi_ctxt_t *ctxt, const char *data, size_t len){
-    const char *p = data;
-    const char *linestart = p;
-    while(p-data<len){
-        if(*++p=='\n'){
-            parseline(ctxt,linestart);
-            linestart = p++;
-        }
-    }
-    return 1;
-}
-
 int gzi_run(gzi_ctxt_t *ctxt){
     if(verbose){
         printf("Running gzi commands\n");
@@ -188,7 +194,9 @@ int gzi_run(gzi_ctxt_t *ctxt){
     return 1;
 }
 
-int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt){
+int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt, 
+             uint8_t *tmd, uint8_t *tik, uint8_t *cert, 
+             uint32_t *tmd_size, uint32_t *tik_size, uint32_t *cert_size){
     ctxt->codes = NULL;
     ctxt->codecnt=0;
     ctxt->curfile=-1;
