@@ -66,7 +66,7 @@ static int gzi_cmd_apply_patch(gzi_ctxt_t *ctxt, int pos){
     gzi_code_t code = ctxt->codes[pos];
     uint32_t val = code.data;
     if(verbose){
-        printf("Apply patch to %d. offset %d = %d\n",curfile,code.offset,code.data);
+        printf("Apply patch to %d. offset 0x%x = 0x%x\n",curfile,code.offset,code.data);
     }
     uint8_t *p;
     switch(curfile){
@@ -173,7 +173,7 @@ int gzi_parse_file(gzi_ctxt_t *ctxt, const char *file){
             fprintf(stderr,"Could not readline from gzi file %s.\n",file);
             return 0;
         }
-        if(line[0]=='#'){
+        if(line[0]=='#' || line[0]==0){
             free(line);
             continue;
         }
@@ -203,6 +203,12 @@ int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt
     ctxt->file_ptrs = files;
     ctxt->file_sizes = filesizes;
     ctxt->filecnt = filecnt;
+    ctxt->tmd = tmd;
+    ctxt->tik = tik;
+    ctxt->cert = cert;
+    ctxt->tmd_size = tmd_size;
+    ctxt->tik_size = tik_size;
+    ctxt->cert_size = cert_size;
     return 1;
 }
 

@@ -24,6 +24,7 @@ static int cleanup = 0;
 static int content_num = 5;
 
 int verbose = 0;
+int dol_after = -1;
 
 static char *wad = NULL;
 static char *directory = NULL;
@@ -66,6 +67,7 @@ static const struct option cmdoptions[] = {
     { "content-num",required_argument,0,'c'},
     { "dol-inject",required_argument,0,'f'},
     { "dol-loading",required_argument,0,'l'},
+    { "dol-after", required_argument,&dol_after,'e'},
 	{ 0,0,0,0}
 };
 
@@ -203,6 +205,7 @@ static void print_usage() {
     "  -c, --content=contentfile    the primary content file (default: 5)\n"
     "  --dol-inject                 Binary data to inject into the emulator program, requires --dol-loading\n"
     "  --dol-loading                The loading address for the binary specified by --dol-inject\n"
+    "  --dol-after                  After which patch file to inject the dol, default: after all patches\n"
     );
 }
 
@@ -452,6 +455,41 @@ static int do_extract() {
     return 1;
 }
 
+static int apply_dol_patch(uint8_t **data, uint32_t *size){
+    if(verbose){
+        printf("Injecting dol file\n");
+    }
+    struct stat sbuffer;
+    chdir(workingdirectory);
+    doltool_ctxt_t *dolctxt = calloc(1,sizeof(*dolctxt));
+    if(!dolctxt){
+        perror("Could not create dol ctxt");
+                    return -1;
+    }
+    dol_load(dolctxt,data,size);
+    FILE *inject_file = fopen(dol_inject_file,"rb");
+    if(!inject_file){
+        free(dolctxt);
+        perror(dol_inject_file);
+        return -1;
+    }
+    stat(dol_inject_file,&sbuffer);
+    uint8_t *inject_data = malloc(sbuffer.st_size);
+    fread(inject_data,1,sbuffer.st_size,inject_file);
+    fclose(inject_file);
+
+    char loading_address[10];
+    sscanf(dol_loading,"%9s",loading_address);
+    uint32_t addr;
+    sscanf(loading_address,"%"SCNx32,&addr);
+    dol_inject(dolctxt,inject_data,sbuffer.st_size,addr);
+    dol_save(dolctxt);
+    free(dolctxt);
+    free(inject_data);
+    chdir(directory);
+    return 0;
+}
+
 static int do_pack() {
 	DIR *testdir = opendir(directory);
 	if (testdir) {
@@ -589,7 +627,8 @@ static int do_pack() {
         free(tmd);
         return 0;
     }
-
+    chdir(workingdirectory);
+    chdir(directory);
 	if (verbose) {
 		printf("Modifying content metadata in the TMD\n");
 	}
@@ -638,6 +677,10 @@ static int do_pack() {
         setcontentlength(tmd,i,filesizes[i]);
 	}
 
+    int patch_idx = 0;
+    int dol_applied = 0;
+    if(dol_after>=101) dol_after-=101;
+
 	while(patch){
         if(verbose){
             printf("Applying %s gzi patches\n",patch->filename);
@@ -673,39 +716,22 @@ static int do_pack() {
             perror("Could not destory gzi patch file");
             goto error;
         }
-
         patch_list_t *old_patch = patch;
         patch = patch->next;
         free(old_patch);
+        if(dol_after == patch_idx){
+            if(dol_inject_file){
+                apply_dol_patch(&fileptrs[1],&filesizes[1]);
+                setcontentlength(tmd,1,filesizes[1]);
+                dol_applied = 1;
+            }
+        }
+        patch_idx++;
 	}
 
-    if(dol_inject_file){
-        chdir(workingdirectory);
-        doltool_ctxt_t *dolctxt = calloc(1,sizeof(*dolctxt));
-        if(!dolctxt){
-            perror("Could not create dol ctxt");
-            goto error;
-        }
-        dol_load(dolctxt,&fileptrs[1],&filesizes[1]);
-        FILE *inject_file = fopen(dol_inject_file,"rb");
-        if(!inject_file){
-            perror(dol_inject_file);
-            goto error;
-        }
-        stat(dol_inject_file,&sbuffer);
-        uint8_t *inject_data = malloc(sbuffer.st_size);
-        fread(inject_data,1,sbuffer.st_size,inject_file);
-        fclose(inject_file);
-
-        char loading_address[10];
-        sscanf(dol_loading,"%9s",loading_address);
-        uint32_t addr;
-        sscanf(loading_address,"%"SCNx32,&addr);
-        dol_inject(dolctxt,inject_data,sbuffer.st_size,addr);
-        dol_save(dolctxt);
-        free(dolctxt);
+    if(!dol_applied && dol_inject_file){
+        apply_dol_patch(&fileptrs[1],&filesizes[1]);
         setcontentlength(tmd,1,filesizes[1]);
-        chdir(directory);
     }
 
 	// Change Title ID

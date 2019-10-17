@@ -40,6 +40,7 @@ Options:
   -c, --content=contentfile    the primary content file (default: 5)
   --dol-inject                 Binary data to inject into the emulator program, requires --dol-loading
   --dol-loading                The loading address for the binary specified by --dol-inject
+  --dol-after                  After which patch file to inject the dol, default: after all patches
 ```
 
 ## Patch

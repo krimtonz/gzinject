@@ -56,7 +56,7 @@ size_t dol_save(doltool_ctxt_t *ctxt){
     uint32_t data_sizes[11];
     memcpy(text_sizes,ctxt->hdr.text_size,sizeof(ctxt->hdr.text_size));
     memcpy(data_sizes,ctxt->hdr.data_size,sizeof(ctxt->hdr.data_size));
-    uint32_t totalsize = 0;
+    uint32_t totalsize = 0x100;
     for(int i=0;i<7;i++){
         totalsize += ctxt->hdr.text_size[i];
         ctxt->hdr.text_size[i] = REVERSEENDIAN32(ctxt->hdr.text_size[i]);
