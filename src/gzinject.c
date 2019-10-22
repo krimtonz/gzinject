@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <errno.h>
 
 #include "gzinject.h"
 #include "lz77.h"
@@ -464,13 +465,15 @@ static int apply_dol_patch(uint8_t **data, uint32_t *size){
     doltool_ctxt_t *dolctxt = calloc(1,sizeof(*dolctxt));
     if(!dolctxt){
         perror("Could not create dol ctxt");
-                    return -1;
+        errno = ENOMEM;
+        return -1;
     }
     dol_load(dolctxt,data,size);
     FILE *inject_file = fopen(dol_inject_file,"rb");
     if(!inject_file){
         free(dolctxt);
         perror(dol_inject_file);
+        errno = ENOENT;
         return -1;
     }
     stat(dol_inject_file,&sbuffer);
@@ -721,7 +724,10 @@ static int do_pack() {
         free(old_patch);
         if(dol_after == patch_idx){
             if(dol_inject_file){
-                apply_dol_patch(&fileptrs[1],&filesizes[1]);
+                if(apply_dol_patch(&fileptrs[1],&filesizes[1])){
+                    perror("couldn't inject dol patch.");
+                    goto error;
+                }
                 setcontentlength(tmd,1,filesizes[1]);
                 dol_applied = 1;
             }
@@ -730,7 +736,10 @@ static int do_pack() {
 	}
 
     if(!dol_applied && dol_inject_file){
-        apply_dol_patch(&fileptrs[1],&filesizes[1]);
+        if(apply_dol_patch(&fileptrs[1],&filesizes[1])){
+            perror("couldn't inject dol patch.");
+            goto error;
+        }
         setcontentlength(tmd,1,filesizes[1]);
     }
 
