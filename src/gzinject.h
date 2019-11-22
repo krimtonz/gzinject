@@ -23,8 +23,20 @@ typedef enum{
 
 typedef struct patch_list patch_list_t;
 struct patch_list {
-    const char   *filename;
-    patch_list_t *next;
+    const char     *filename;
+    patch_list_t   *next;
+};
+
+typedef struct dol_list dol_list_t;
+struct dol_list{
+    const char *filename;
+    dol_list_t *next;
+};
+
+typedef struct dol_loading_list dol_loading_list_t;
+struct dol_loading_list{
+    uint32_t            loading_address;
+    dol_loading_list_t *next;
 };
 
  uint16_t be16(const uint8_t *p);

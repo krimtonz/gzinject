@@ -35,10 +35,12 @@ static char *rom = NULL;
 static char *outwad = NULL;
 static patch_list_t *patch = NULL;
 static patch_list_t **patch_link = &patch;
+static dol_list_t *dol = NULL;
+static dol_list_t **dol_link = &dol;
+static dol_loading_list_t *dol_loading = NULL;
+static dol_loading_list_t **dol_loading_link = &dol_loading;
 static char *titleid = NULL;
 static char *channelname = NULL;
-static char *dol_inject_file = NULL;
-static char *dol_loading = NULL;
 
 uint16_t be16(const uint8_t *p)
 {
@@ -456,7 +458,7 @@ static int do_extract() {
     return 1;
 }
 
-static int apply_dol_patch(uint8_t **data, uint32_t *size){
+static int apply_dol_patch(const char *dol_file, uint32_t loading_address, uint8_t **data, uint32_t *size){
     if(verbose){
         printf("Injecting dol file\n");
     }
@@ -469,27 +471,26 @@ static int apply_dol_patch(uint8_t **data, uint32_t *size){
         return -1;
     }
     dol_load(dolctxt,data,size);
-    FILE *inject_file = fopen(dol_inject_file,"rb");
+    FILE *inject_file = fopen(dol_file,"rb");
     if(!inject_file){
         free(dolctxt);
-        perror(dol_inject_file);
+        perror(dol_file);
         errno = ENOENT;
         return -1;
     }
-    stat(dol_inject_file,&sbuffer);
+    stat(dol_file,&sbuffer);
     uint8_t *inject_data = malloc(sbuffer.st_size);
     fread(inject_data,1,sbuffer.st_size,inject_file);
     fclose(inject_file);
 
-    char loading_address[10];
-    sscanf(dol_loading,"%9s",loading_address);
-    uint32_t addr;
-    sscanf(loading_address,"%"SCNx32,&addr);
-    dol_inject(dolctxt,inject_data,sbuffer.st_size,addr);
+    dol_inject(dolctxt,inject_data,sbuffer.st_size,loading_address);
     dol_save(dolctxt);
     free(dolctxt);
     free(inject_data);
     chdir(directory);
+    FILE *test = fopen("/mnt/c/Users/andy/Desktop/test.dol","wb");
+    fwrite(*data,1,*size,test);
+    fclose(test);
     return 0;
 }
 
@@ -723,22 +724,30 @@ static int do_pack() {
         patch = patch->next;
         free(old_patch);
         if(dol_after == patch_idx){
-            if(dol_inject_file){
-                if(apply_dol_patch(&fileptrs[1],&filesizes[1])){
-                    perror("couldn't inject dol patch.");
-                    goto error;
-                }
-                setcontentlength(tmd,1,filesizes[1]);
-                dol_applied = 1;
+            while(dol && dol_loading){
+                apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]);
+                dol_list_t *old_dol = dol;
+                dol = dol->next;
+                free(old_dol);
+                dol_loading_list_t *old_loading = dol_loading;
+                dol_loading = dol_loading->next;
+                free(old_loading);
             }
+            dol_applied = 1;
+            setcontentlength(tmd,1,filesizes[1]);
         }
         patch_idx++;
 	}
 
-    if(!dol_applied && dol_inject_file){
-        if(apply_dol_patch(&fileptrs[1],&filesizes[1])){
-            perror("couldn't inject dol patch.");
-            goto error;
+    if(!dol_applied && dol && dol_loading){
+        while(dol && dol_loading){
+            apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]);
+            dol_list_t *old_dol = dol;
+            dol = dol->next;
+            free(old_dol);
+            dol_loading_list_t *old_loading = dol_loading;
+            dol_loading = dol_loading->next;
+            free(old_loading);
         }
         setcontentlength(tmd,1,filesizes[1]);
     }
@@ -1112,11 +1121,32 @@ int main(int argc, char **argv) {
             if(content_num<0 || content_num>9) content_num=5;
             break;
         case 'f':
-            dol_inject_file = optarg;
+        {
+            dol_list_t *new_dol = malloc(sizeof(*new_dol));
+            if(new_dol == NULL){
+                perror("Could not allocate dol list");
+                exit(1);
+            }
+            new_dol->filename = optarg;
+            *dol_link = new_dol;
+            dol_link = &new_dol->next;
             break;
-        case 'l':
-            dol_loading = optarg;
+        }
+        case 'l':{
+            char loading_address[10];
+            sscanf(optarg,"%9s",loading_address);
+            uint32_t addr;
+            sscanf(loading_address,"%"SCNx32,&addr);
+            dol_loading_list_t *new_dol_loading = malloc(sizeof(*new_dol_loading));
+            if(new_dol_loading == NULL){
+                perror("Could not allocate dol loading address.");
+                exit(1);
+            }
+            new_dol_loading->loading_address = addr;
+            *dol_loading_link = new_dol_loading;
+            dol_loading_link = &new_dol_loading->next;
             break;
+        }
 		default:
 			break;
 		}

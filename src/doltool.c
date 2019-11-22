@@ -33,6 +33,7 @@ void dol_load(doltool_ctxt_t *ctxt, uint8_t **file_data, uint32_t *file_size){
 
 void dol_inject(doltool_ctxt_t *ctxt, uint8_t *text, size_t size, uint32_t loading_addr){
     int injection_idx = 0;
+    size = addpadding(size,16);
     for(int i = 0;i<7;i++){
         if(ctxt->text_sections[i]) continue;
         injection_idx = i;
