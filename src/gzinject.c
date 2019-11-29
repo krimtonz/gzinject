@@ -488,9 +488,6 @@ static int apply_dol_patch(const char *dol_file, uint32_t loading_address, uint8
     free(dolctxt);
     free(inject_data);
     chdir(directory);
-    FILE *test = fopen("/mnt/c/Users/andy/Desktop/test.dol","wb");
-    fwrite(*data,1,*size,test);
-    fclose(test);
     return 0;
 }
 
