@@ -723,6 +723,7 @@ static int do_pack() {
         if(dol_after == patch_idx){
             while(dol && dol_loading){
                 if (apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]) != 0) {
+                    fprintf(stderr, "Could not inject dol patch\n");
                     goto error;
                 }
                 dol_list_t *old_dol = dol;
@@ -741,6 +742,7 @@ static int do_pack() {
     if(!dol_applied && dol && dol_loading){
         while(dol && dol_loading){
             if (apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]) != 0) {
+                fprintf(stderr, "Could not inject dol patch\n");
                 goto error;
             }
             dol_list_t *old_dol = dol;
