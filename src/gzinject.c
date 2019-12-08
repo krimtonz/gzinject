@@ -722,7 +722,9 @@ static int do_pack() {
         free(old_patch);
         if(dol_after == patch_idx){
             while(dol && dol_loading){
-                apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]);
+                if (apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]) != 0) {
+                    goto error;
+                }
                 dol_list_t *old_dol = dol;
                 dol = dol->next;
                 free(old_dol);
@@ -738,7 +740,9 @@ static int do_pack() {
 
     if(!dol_applied && dol && dol_loading){
         while(dol && dol_loading){
-            apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]);
+            if (apply_dol_patch(dol->filename,dol_loading->loading_address,&fileptrs[1],&filesizes[1]) != 0) {
+                goto error;
+            }
             dol_list_t *old_dol = dol;
             dol = dol->next;
             free(old_dol);
