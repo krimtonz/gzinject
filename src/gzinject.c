@@ -460,7 +460,7 @@ static int do_extract() {
 
 static int apply_dol_patch(const char *dol_file, uint32_t loading_address, uint8_t **data, uint32_t *size){
     if(verbose){
-        printf("Injecting dol file\n");
+        printf("Injecting dol file %s\n",dol_file);
     }
     struct stat sbuffer;
     chdir(workingdirectory);
@@ -482,7 +482,6 @@ static int apply_dol_patch(const char *dol_file, uint32_t loading_address, uint8
     uint8_t *inject_data = malloc(sbuffer.st_size);
     fread(inject_data,1,sbuffer.st_size,inject_file);
     fclose(inject_file);
-
     dol_inject(dolctxt,inject_data,sbuffer.st_size,loading_address);
     dol_save(dolctxt);
     free(dolctxt);
@@ -1125,6 +1124,7 @@ int main(int argc, char **argv) {
                 exit(1);
             }
             new_dol->filename = optarg;
+            new_dol->next = NULL;
             *dol_link = new_dol;
             dol_link = &new_dol->next;
             break;
@@ -1140,6 +1140,7 @@ int main(int argc, char **argv) {
                 exit(1);
             }
             new_dol_loading->loading_address = addr;
+            new_dol_loading->next = NULL;
             *dol_loading_link = new_dol_loading;
             dol_loading_link = &new_dol_loading->next;
             break;
