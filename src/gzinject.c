@@ -31,7 +31,7 @@ static char *wad = NULL;
 static char *directory = NULL;
 static char *keyfile = NULL;
 static char    *workingdirectory = NULL;
-static char *rom = NULL; 
+static char *rom = NULL;
 static char *outwad = NULL;
 static patch_list_t *patch = NULL;
 static patch_list_t **patch_link = &patch;
@@ -70,7 +70,7 @@ static const struct option cmdoptions[] = {
     { "content-num",required_argument,0,'c'},
     { "dol-inject",required_argument,0,'f'},
     { "dol-loading",required_argument,0,'l'},
-    { "dol-after", required_argument,&dol_after,'e'},
+    { "dol-after", required_argument,0,'e'},
     { 0,0,0,0}
 };
 
@@ -295,7 +295,7 @@ static int do_extract() {
     uint32_t footerpos = datapos + addpadding(datasize,64);
 
     if (cleanup == 1) removedir(directory);
-    
+
     stat(directory,&sbuffer);
     if(S_ISDIR(sbuffer.st_mode)){
         if(verbose){
@@ -617,7 +617,7 @@ static int do_pack() {
     if(verbose){
         printf("Generating %s u8 archive\n",nbuf);
     }
-    
+
     int content5len = create_u8_archive(dbuf,nbuf);
     if(!content5len){
         fprintf(stderr,"Could not create u8 archive from %s into %s\n",dbuf,nbuf);
@@ -632,7 +632,7 @@ static int do_pack() {
         printf("Modifying content metadata in the TMD\n");
     }
     uint16_t contentsc = be16(tmd + 0x1DE);
-    int i;    
+    int i;
 
     char cfname[100];
     uint8_t **fileptrs = malloc(sizeof(*fileptrs) * contentsc);
@@ -814,8 +814,8 @@ static int do_pack() {
                     uint16_t count = 0;
                     size_t cnamelen = strlen(channelname);
                     char namebuf[40] = {0};
-                    for(j=0,count=0;count<cnamelen;j+=2,count++) 
-                        namebuf[j+1] = channelname[count]; 
+                    for(j=0,count=0;count<cnamelen;j+=2,count++)
+                        namebuf[j+1] = channelname[count];
                     char *names = (char*)contents + imetpos + 28;
                     for(j=0;j<8;j++){
                         memcpy(names + (j*84),namebuf,40);
@@ -855,7 +855,7 @@ skipmd5:
         if (verbose) {
             printf("Encrypting content %d\n", i);
         }
-        
+
         do_encrypt(contents, filesizes[i], newenc, iv);
 
     }
@@ -900,7 +900,7 @@ skipmd5:
         perror("Could not write header sizes to wad\n");
         goto error;
     }
-    
+
     char headerpadding[32];
     memset(&headerpadding, 0, 32);
     fwrite(&headerpadding, 1, 32, outwadfile);
@@ -971,7 +971,7 @@ skipmd5:
     free(fileptrs);
     free(filesizes);
 
-    if (cleanup) 
+    if (cleanup)
         removedir(directory);
 
     return 1;
@@ -1148,6 +1148,12 @@ int main(int argc, char **argv) {
             new_dol_loading->next = NULL;
             *dol_loading_link = new_dol_loading;
             dol_loading_link = &new_dol_loading->next;
+            break;
+        }
+        case 'e': {
+            char dol_after_str[10];
+            sscanf(optarg, "%s", dol_after_str);
+            sscanf(dol_after_str, "%"SCNu32, &dol_after);
             break;
         }
         default:

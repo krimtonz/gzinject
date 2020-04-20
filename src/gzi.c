@@ -194,8 +194,8 @@ int gzi_run(gzi_ctxt_t *ctxt){
     return 1;
 }
 
-int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt, 
-             uint8_t *tmd, uint8_t *tik, uint8_t *cert, 
+int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt,
+             uint8_t *tmd, uint8_t *tik, uint8_t *cert,
              uint32_t *tmd_size, uint32_t *tik_size, uint32_t *cert_size){
     ctxt->codes = NULL;
     ctxt->codecnt=0;
@@ -215,4 +215,4 @@ int gzi_init(gzi_ctxt_t *ctxt, uint8_t **files, uint32_t *filesizes, int filecnt
 int gzi_destroy(gzi_ctxt_t *ctxt){
     if(ctxt->codes) free(ctxt->codes);
     return 1;
-}   
+}
