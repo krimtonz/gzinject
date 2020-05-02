@@ -259,7 +259,7 @@ static int do_extract() {
 
     uint8_t *data = (uint8_t*)malloc(sbuffer.st_size);
     if(!data){
-        fprintf(stderr,"Could not allocate %ld bytes for wad\n",sbuffer.st_size);
+        fprintf(stderr,"Could not allocate %lld bytes for wad\n",sbuffer.st_size);
         return 0;
     }
     FILE *wadfile = fopen(wad, "rb");
@@ -659,7 +659,7 @@ static int do_pack() {
         filesizes[i] = addpadding(sbuffer.st_size,16);
         fileptrs[i] = calloc(filesizes[i],1);
         if(!fileptrs[i]){
-            fprintf(stderr,"Could not allocate %ld bytes for %s\n",sbuffer.st_size,cfname);
+            fprintf(stderr,"Could not allocate %lld bytes for %s\n",sbuffer.st_size,cfname);
             goto error;
         }
         infile = fopen(cfname,"rb");
@@ -1006,7 +1006,7 @@ void romc(){
     }
     uint8_t *comp = malloc(sbuffer.st_size);
     if(!comp){
-        printf("Could not alloc %ld bytes\n",sbuffer.st_size);
+        printf("Could not alloc %lld bytes\n",sbuffer.st_size);
     }
     fread(comp,1,sbuffer.st_size,inrom);
     fclose(inrom);
