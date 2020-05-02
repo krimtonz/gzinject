@@ -810,7 +810,7 @@ static int do_pack() {
                         break;
                     }
                 }
-                if(imetpos!=-1){
+                if(imetpos!=(uint16_t)-1){
                     uint16_t count = 0;
                     size_t cnamelen = strlen(channelname);
                     char namebuf[40] = {0};
