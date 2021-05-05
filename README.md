@@ -26,7 +26,7 @@ Actions:
 
 Options:
   -i, --channelid=ID           New Channel ID For Pack and Inject actions (default: none)
-  -t, --title=title            New Channel ID for pack or inject actions (default: none)
+  -t, --title=title            New Channel name for pack and inject actions (default: none)
   -h, --help                   Prints this help message
   -k, --key=keyfile            Location of the common-key file (default: common-key.bin)
   -r, --region=1-3             Region to use (default: 3)

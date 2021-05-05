@@ -194,7 +194,7 @@ static void print_usage() {
     "  genkey       generates wii common-key\n\n"
     "Options:\n"
     "  -i, --channelid=ID           New Channel ID For Pack and Inject actions (default: none)\n"
-    "  -t, --title=title            New Channel ID for pack or inject actions (default: none)\n"
+    "  -t, --title=title            New Channel name for pack and inject actions (default: none)\n"
     "  -h, --help                   Prints this help message\n"
     "  -k, --key=keyfile            Location of the common-key file (default: ./common-key.bin)\n"
     "  -r, --region=1-3             Region to use (default: 3)\n"
