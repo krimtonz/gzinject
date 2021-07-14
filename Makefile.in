@@ -27,7 +27,7 @@ distclean	:	clean
 	rm -f Makefile
 
 install		:	$(PROGNAME)
-	$(INSTALL) -p -D --target-directory=$(bindir) $(PROGNAME)
+	$(INSTALL) -p -D --target-directory=$(DESTDIR)$(bindir) $(PROGNAME)
 
 $(PROGNAME)	:	$(COBJ)
 	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS) 
