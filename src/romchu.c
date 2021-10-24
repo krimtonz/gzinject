@@ -36,6 +36,7 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
     unsigned char payload_buf[0x10000];
     int block_count = 0;
     long out_offset = 0;
+    uint8_t *decompressed;
 
     uint64_t nominal_size;
     int romc_type;
@@ -51,11 +52,24 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
         nominal_size *= 0x40;
         nominal_size |= head_buf[3]>>2;
         romc_type = head_buf[3]&0x3;
-
-        if (romc_type != 2)
+        decompressed = malloc(nominal_size);
+        if(decomp_size) *decomp_size = nominal_size;
+        if (!decompressed)
         {
-            fprintf(stderr,"Expected type 2 romc, got %d\n", romc_type);
+            perror("malloc big outbuf buffer");
             return NULL;
+        }
+
+        switch(romc_type) {
+            case 0:
+                memcpy(decompressed, compressed + 4, *decomp_size);
+                return decompressed;
+            case 2:
+                break;
+            default:
+                fprintf(stderr, "Unsupported romc type. %d\n", romc_type);
+                return NULL;
+
         }
     }
 
@@ -97,18 +111,10 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
         }
     }
 
-    // be lazy and just allocate memory for the whole file
-    uint8_t *decompressed = malloc(nominal_size);
-    if(decomp_size) *decomp_size = nominal_size;
-    if (!decompressed)
-    {
-        perror("malloc big outbuf buffer");
-        return NULL;
-    }
     out_offset = 0;
     // decode each block
     compressed += 4;
-    
+
     while (compressed - comp < comp_size)
     {
         memcpy(head_buf,compressed,4);
@@ -178,7 +184,7 @@ uint8_t *romchu_decompress(uint8_t *compressed, size_t comp_size, size_t *decomp
             unsigned long tab1_offset, tab2_offset, body_offset;
             struct bitstream *bs;
             struct huftable *table1, *table2;
-            
+
             /* read table 1 size */
             tab1_offset = 0;
             bs = init_bitstream(payload_buf + tab1_offset, payload_bytes*8+payload_bits);
