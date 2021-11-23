@@ -17,6 +17,7 @@
 #include "md5.h"
 #include "romchu.h"
 #include "doltool.h"
+#include "fastaes.h"
 
 static uint8_t key[16] = {0};
 static uint8_t region = 0x03;
@@ -78,19 +79,34 @@ const uint8_t newkey[16] = {
     0x47, 0x5a, 0x49, 0x73, 0x4c, 0x69, 0x66, 0x65, 0x41, 0x6e, 0x64, 0x42, 0x65, 0x65, 0x72, 0x21
 };
 
-static struct AES_ctx aes;
 static SHA1_CTX sha1;
 static MD5_CTX md5;
 
- static void do_encrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+#ifdef FASTAES
+static aes_ctxt_t aes;
+static void do_encrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+    aes_ctx_init(&aes, key, iv);
+    aes_encrypt_buffer(&aes, input, size);
+}
+
+static void do_decrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+    aes_ctx_init(&aes, key, iv);
+    aes_decrypt_buffer(&aes, input, size);
+}
+
+#else
+
+static struct AES_ctx aes;
+static void do_encrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
     AES_init_ctx_iv(&aes, key, iv);
     AES_CBC_encrypt_buffer(&aes, input, size);
 }
 
- static void do_decrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
+static void do_decrypt(uint8_t *input, size_t size, const uint8_t *key, const uint8_t *iv) {
     AES_init_ctx_iv(&aes, key, iv);
     AES_CBC_decrypt_buffer(&aes, input, size);
 }
+#endif
 
  static void do_sha1(uint8_t *input, uint8_t *output, size_t size) {
     SHA1Init(&sha1);

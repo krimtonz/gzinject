@@ -2,7 +2,7 @@ CC		= @CC@
 LD		= @CC@
 INSTALL		= @INSTALL@
 CFLAGS		= -Wall -Wno-unused-result @CFLAGS@
-CPPFLAGS		=
+CPPFLAGS		= @CPPFLAGS@
 prefix 		= @prefix@
 exec_prefix 	= @exec_prefix@
 bindir		= @bindir@
@@ -12,7 +12,7 @@ CFILES		= *.c
 SRCDIR		= src
 CSRC	   	:= $(foreach s,$(CFILES),$(wildcard $(SRCDIR)/$(s)))
 COBJ		= $(patsubst $(SRCDIR)/%,$(OBJDIR)/%.o,$(CSRC))
-LIBS		= 
+LIBS		=
 OBJDIR		= obj
 OUTDIR		= $(OBJDIR)
 
@@ -30,7 +30,7 @@ install		:	$(PROGNAME)
 	$(INSTALL) -p -D --target-directory=$(DESTDIR)$(bindir) $(PROGNAME)
 
 $(PROGNAME)	:	$(COBJ)
-	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS) 
+	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 $(OUTDIR)   	:
 	mkdir -p $@
