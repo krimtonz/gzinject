@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <sys/stat.h>
-#include <malloc.h>
+#if defined(__MACH__)
+  #include <stdlib.h>
+#else 
+  #include <malloc.h>
 #include <string.h>
 
 #include "doltool.h"
