@@ -437,7 +437,7 @@ static int do_extract() {
         // Main rom content file
         if (i == content_num) {
             if (verbose) {
-                printf("Extracting content %d uint8_t Archive.\n",content_num);
+                printf("Extracting content %d u8 archive.\n",content_num);
             }
             char dbuf[100];
             snprintf(dbuf,100,"content%d",content_num);
