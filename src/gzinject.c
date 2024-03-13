@@ -437,7 +437,7 @@ static int do_extract() {
         // Main rom content file
         if (i == content_num) {
             if (verbose) {
-                printf("Extracting content %d uint8_t Archive.\n",content_num);
+                printf("Extracting content %d u8 archive.\n",content_num);
             }
             char dbuf[100];
             snprintf(dbuf,100,"content%d",content_num);
@@ -625,29 +625,32 @@ static int do_pack() {
     sprintf(footer,"gzinject v%s https://github.com/krimtonz/gzinject", GZINJECT_VERSION);
     uint32_t footersize = 0x40;
 
-    // Build Content5 into a .app file first
-    char dbuf[100], nbuf[100] = {0};
-    snprintf(dbuf,100,"content%d",content_num);
-    strcpy(nbuf,dbuf);
-    strcat(nbuf,".app");
-    if(verbose){
-        printf("Generating %s u8 archive\n",nbuf);
-    }
+    uint16_t contentsc = be16(tmd + 0x1DE);
 
-    int content5len = create_u8_archive(dbuf,nbuf);
-    if(!content5len){
-        fprintf(stderr,"Could not create u8 archive from %s into %s\n",dbuf,nbuf);
-        free(cert);
-        free(tik);
-        free(tmd);
-        return 0;
+    if (content_num < contentsc) {
+        // Build Content5 into a .app file first
+        char dbuf[100], nbuf[100] = {0};
+        snprintf(dbuf,100,"content%d",content_num);
+        strcpy(nbuf,dbuf);
+        strcat(nbuf,".app");
+        if(verbose){
+            printf("Generating %s u8 archive\n",nbuf);
+        }
+
+        int content5len = create_u8_archive(dbuf,nbuf);
+        if(!content5len){
+            fprintf(stderr,"Could not create u8 archive from %s into %s\n",dbuf,nbuf);
+            free(cert);
+            free(tik);
+            free(tmd);
+            return 0;
+        }
     }
     chdir(workingdirectory);
     chdir(directory);
     if (verbose) {
         printf("Modifying content metadata in the TMD\n");
     }
-    uint16_t contentsc = be16(tmd + 0x1DE);
     int i;
 
     char cfname[100];

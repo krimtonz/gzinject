@@ -1,6 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
-#include <malloc.h>
 #include <string.h>
 
 #include "doltool.h"
